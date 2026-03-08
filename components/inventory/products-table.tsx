@@ -117,7 +117,7 @@ export function ProductsTable() {
             categoryId,
             stock: parseInt(stock, 10),
             status: parseInt(status, 10) as 1 | 2,
-            prices: { usd: 0, cop: 0, ves: 0, exchangeType: "usd" }
+            prices: { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: "usd" }
         })
         await loadData()
         setIsSubmitting(false)

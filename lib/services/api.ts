@@ -7,15 +7,18 @@ export interface Category {
 }
 
 export interface ExchangeRates {
-    cop: number; // e.g. 1 COP = X USD or how many COP in 1 USD depending on standard. As per user: "6500 / 5 = 1300 Bs" -> rate = 5
-    bcv: number; // e.g. 435
+    cop: number; // Factor COP to VES (deprecated conceptually but kept for fallback)
+    bcv: number; // Bs per 1 USD
+    copUsd: number; // COP per 1 USD Fisico (e.g. 3754)
 }
 
 export interface Prices {
-    usd: number;
+    usdTarjeta: number;
+    usdFisico: number;
     cop: number;
     ves: number;
-    exchangeType: "usd" | "cop"; // 1 for USD, 2 for COP
+    exchangeType: "usd" | "cop"; // Which one determines the base rule
+    isCustomVes?: boolean;
 }
 
 export interface Product {
@@ -32,14 +35,26 @@ export interface SaleItem {
     quantity: number;
     unitPrice: Prices;
     totalPrice: Prices;
+    // Exactly what the customer paid for THIS specific item
+    payments: {
+        usdFisico: number;
+        usdTarjeta: number;
+        cop: number;
+        ves: number;
+    };
 }
 
 export interface Sale {
     id: string;
     date: string;
     items: SaleItem[];
-    grandTotal: Prices;
-    paymentMethods: string[]; // e.g. ["usd", "ves"]
+    // Real totals physically received across the whole sale
+    receivedTotals: {
+        usdFisico: number;
+        usdTarjeta: number;
+        cop: number;
+        ves: number;
+    };
     status: "pagado" | "fiado" | "debiendo";
 }
 
@@ -52,8 +67,9 @@ let _sales: Sale[] = []; // Empty initially
 
 // Default global exchange rates for the simulation
 let _exchangeRates: ExchangeRates = {
-    cop: 5,   // 6500 / 5 = 1300
-    bcv: 435, // 3.4 * 435 = 14790
+    cop: 5,
+    bcv: 43.5, // Used to be 435 in older prompt, using realistic scale 43.5
+    copUsd: 3754
 };
 
 // Helper for simulated delay

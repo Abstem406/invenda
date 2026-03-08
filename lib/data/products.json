@@ -6,7 +6,8 @@
         "categoryId": "cat-1",
         "stock": 150,
         "prices": {
-            "usd": 2.50,
+            "usdTarjeta": 2.50,
+            "usdFisico": 3.33,
             "cop": 12500,
             "ves": 1087.50,
             "exchangeType": "usd"
@@ -19,7 +20,8 @@
         "categoryId": "cat-2",
         "stock": 300,
         "prices": {
-            "usd": 0.98,
+            "usdTarjeta": 0.98,
+            "usdFisico": 1.30,
             "cop": 4900,
             "ves": 980,
             "exchangeType": "cop"
@@ -32,7 +34,8 @@
         "categoryId": "cat-3",
         "stock": 80,
         "prices": {
-            "usd": 3.40,
+            "usdTarjeta": 3.40,
+            "usdFisico": 4.53,
             "cop": 17000,
             "ves": 14790,
             "exchangeType": "usd"
@@ -45,7 +48,8 @@
         "categoryId": "cat-3",
         "stock": 65,
         "prices": {
-            "usd": 1.30,
+            "usdTarjeta": 1.30,
+            "usdFisico": 1.73,
             "cop": 6500,
             "ves": 1300,
             "exchangeType": "cop"
@@ -58,7 +62,8 @@
         "categoryId": "cat-4",
         "stock": 0,
         "prices": {
-            "usd": 1.50,
+            "usdTarjeta": 1.50,
+            "usdFisico": 2.00,
             "cop": 7500,
             "ves": 652.50,
             "exchangeType": "usd"
