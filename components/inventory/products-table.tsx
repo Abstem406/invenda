@@ -47,7 +47,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Edit, Plus, Trash2 } from "lucide-react"
+import { Edit, Plus, Trash2, ArrowUpDown } from "lucide-react"
 
 export function ProductsTable() {
     const [products, setProducts] = React.useState<Product[]>([])
@@ -69,8 +69,21 @@ export function ProductsTable() {
     // Pagination states
     const [currentPage, setCurrentPage] = React.useState(1)
     const ITEMS_PER_PAGE = 5
-    const totalPages = Math.max(1, Math.ceil(products.length / ITEMS_PER_PAGE))
-    const paginatedProducts = products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+
+    // Sorting state
+    const [sortOrder, setSortOrder] = React.useState<"asc" | "desc" | null>(null)
+
+    // Derived states
+    const sortedProducts = React.useMemo(() => {
+        if (!sortOrder) return products;
+        return [...products].sort((a, b) => {
+            if (sortOrder === "asc") return a.stock - b.stock;
+            return b.stock - a.stock;
+        });
+    }, [products, sortOrder]);
+
+    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / ITEMS_PER_PAGE))
+    const paginatedProducts = sortedProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
     React.useEffect(() => {
         loadData()
@@ -233,7 +246,16 @@ export function ProductsTable() {
                             <TableHead>Nombre</TableHead>
                             <TableHead>Estado</TableHead>
                             <TableHead>Categoría</TableHead>
-                            <TableHead>Stock</TableHead>
+                            <TableHead>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                                    className="-ml-4 h-8 data-[state=open]:bg-accent"
+                                >
+                                    Stock
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
                             <TableHead className="w-[100px] text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>

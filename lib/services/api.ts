@@ -27,11 +27,28 @@ export interface Product {
     prices: Prices;
 }
 
+export interface SaleItem {
+    productId: string;
+    quantity: number;
+    unitPrice: Prices;
+    totalPrice: Prices;
+}
+
+export interface Sale {
+    id: string;
+    date: string;
+    items: SaleItem[];
+    grandTotal: Prices;
+    paymentMethods: string[]; // e.g. ["usd", "ves"]
+    status: "pagado" | "fiado" | "debiendo";
+}
+
 // In-memory data store for the lifetime of the session.
 // In Next.js dev server, this state drops on reload if not persistent,
 // which is fine for UI mock purposes.
 let _categories = [...categoriesData] as Category[];
 let _products = [...productsData] as Product[];
+let _sales: Sale[] = []; // Empty initially
 
 // Default global exchange rates for the simulation
 let _exchangeRates: ExchangeRates = {
@@ -109,5 +126,30 @@ export const api = {
         await delay(300);
         _exchangeRates = { ...rates };
         return { ..._exchangeRates };
+    },
+
+    // Sales
+    getSales: async (): Promise<Sale[]> => {
+        await delay(300);
+        return [..._sales];
+    },
+    createSale: async (sale: Omit<Sale, "id" | "date">): Promise<Sale> => {
+        await delay(500);
+        const newSale: Sale = {
+            ...sale,
+            id: `sale-${Date.now()}`,
+            date: new Date().toISOString()
+        };
+        _sales.push(newSale);
+
+        // Deduct stock from products
+        for (const item of newSale.items) {
+            const pIdx = _products.findIndex(p => p.id === item.productId);
+            if (pIdx > -1) {
+                _products[pIdx].stock = Math.max(0, _products[pIdx].stock - item.quantity);
+            }
+        }
+
+        return newSale;
     }
 };
