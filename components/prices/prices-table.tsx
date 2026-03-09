@@ -42,7 +42,7 @@ import { Switch } from "@/components/ui/switch"
 export function PricesTable() {
     const [products, setProducts] = React.useState<Product[]>([])
     const [categories, setCategories] = React.useState<Category[]>([])
-    const [rates, setRates] = React.useState<ExchangeRates>({ cop: 1, bcv: 1, copUsd: 3754 })
+    const [rates, setRates] = React.useState<ExchangeRates>({ cop: 5, bcv: 435, copUsd: 3754 })
     const [loading, setLoading] = React.useState(true)
 
     // Rates config dialog
@@ -106,9 +106,9 @@ export function PricesTable() {
 
     // Function to calculate VES dynamically based on Base Divisa
     const calculateVes = (type: "usd" | "cop", valUsdTarjeta: number, valCop: number) => {
-        console.log("rates:", rates);
-        console.log("valUsdTarjeta:", valUsdTarjeta);
-        console.log("valUsdTarjeta * rates.bcv:", valUsdTarjeta * rates.bcv);
+        //  console.log("rates:", rates);
+        //  console.log("valUsdTarjeta:", valUsdTarjeta);
+        //  console.log("valUsdTarjeta * rates.bcv:", valUsdTarjeta * rates.bcv);
 
         if (type === "usd") return valUsdTarjeta * rates.bcv;
         return valCop / rates.cop;
@@ -129,11 +129,18 @@ export function PricesTable() {
         }
         await api.updateExchangeRates(newRates)
 
-        // Updating global rates means we might need to recalculate all VES prices for all products
-        // to reflect immediately, we iterate and update all.
-        // In a real DB this would be handled differently (e.g. calculated on the fly on GET).
-        // For the mock, we can just reload data, but we need to update the mock JSON storage technically.
-        // For visual display, calculateVes runs dynamically in the render if we just store the base price.
+        // Recalculate all products' usdFisico based on new copUsd rate
+        // COP is the source of truth, usdFisico = cop / copUsd
+        const allProducts = await api.getProducts();
+        for (const prod of allProducts) {
+            if (prod.prices.cop > 0) {
+                const newUsdFisico = parseFloat((prod.prices.cop / newRates.copUsd).toFixed(2));
+                await api.updatePrices(prod.id, {
+                    ...prod.prices,
+                    usdFisico: newUsdFisico
+                });
+            }
+        }
 
         await loadData()
         setIsSubmitting(false)
@@ -449,7 +456,7 @@ export function PricesTable() {
                                     <TableRow key={prod.id}>
                                         <TableCell className="font-medium">{prod.name}</TableCell>
                                         <TableCell>${prod.prices.usdTarjeta?.toFixed(2) || '0.00'}</TableCell>
-                                        <TableCell>${prod.prices.usdFisico?.toFixed(2) || '0.00'}</TableCell>
+                                        <TableCell>${(prod.prices.cop / rates.copUsd).toFixed(2)}</TableCell>
                                         <TableCell>${prod.prices.cop.toLocaleString('es-CO')}</TableCell>
                                         <TableCell>Bs. {dynamicVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">

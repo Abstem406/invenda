@@ -66,11 +66,26 @@ let _products = [...productsData] as Product[];
 let _sales: Sale[] = []; // Empty initially
 
 // Default global exchange rates for the simulation
-let _exchangeRates: ExchangeRates = {
-    cop: 5,
-    bcv: 43.5, // Used to be 435 in older prompt, using realistic scale 43.5
-    copUsd: 3754
+// Persist to localStorage so values survive page reloads
+const RATES_STORAGE_KEY = "invenda_exchange_rates";
+
+const loadRatesFromStorage = (): ExchangeRates => {
+    if (typeof window !== "undefined") {
+        try {
+            const stored = localStorage.getItem(RATES_STORAGE_KEY);
+            if (stored) return JSON.parse(stored) as ExchangeRates;
+        } catch { /* ignore parse errors, fall back to defaults */ }
+    }
+    return { cop: 5, bcv: 435, copUsd: 3754 };
 };
+
+const saveRatesToStorage = (rates: ExchangeRates) => {
+    if (typeof window !== "undefined") {
+        localStorage.setItem(RATES_STORAGE_KEY, JSON.stringify(rates));
+    }
+};
+
+let _exchangeRates: ExchangeRates = loadRatesFromStorage();
 
 // Helper for simulated delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -141,6 +156,7 @@ export const api = {
     updateExchangeRates: async (rates: ExchangeRates): Promise<ExchangeRates> => {
         await delay(300);
         _exchangeRates = { ...rates };
+        saveRatesToStorage(_exchangeRates);
         return { ..._exchangeRates };
     },
 
