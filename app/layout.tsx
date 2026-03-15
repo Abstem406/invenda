@@ -2,10 +2,8 @@ import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/lib/auth-context"
 import { cn } from "@/lib/utils";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { TooltipProvider } from "@/components/ui/tooltip"
 
 const fontSans = Geist({
   subsets: ["latin"],
@@ -24,28 +22,18 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="es"
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", fontSans.variable)}
     >
       <body suppressHydrationWarning>
         <ThemeProvider>
-          <TooltipProvider>
-            <SidebarProvider>
-              <AppSidebar />
-              <div className="flex flex-col w-full h-screen overflow-hidden">
-                <header className="flex items-center h-16 shrink-0 px-8 border-b gap-4">
-                  <SidebarTrigger />
-                  <div className="font-semibold text-lg">Panel de Control</div>
-                </header>
-                <main className="flex-1 overflow-y-auto">
-                  {children}
-                </main>
-              </div>
-            </SidebarProvider>
-          </TooltipProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   )
 }
+

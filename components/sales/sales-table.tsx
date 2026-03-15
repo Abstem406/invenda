@@ -103,15 +103,32 @@ export function SalesTable() {
         return { usdTarjeta: uT, usdFisico: uF, cop: c, ves: v }
     }, [cart, rates, getDynamicVes]);
 
-    // Pagination states
+    // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
-    const ITEMS_PER_PAGE = 5
-    const totalPages = Math.max(1, Math.ceil(sales.length / ITEMS_PER_PAGE))
-    const paginatedSales = sales.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    const [totalPages, setTotalPages] = React.useState(1)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [debouncedSearch, setDebouncedSearch] = React.useState("")
+    const [limit, setLimit] = React.useState<number>(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("invenda_sales_limit")
+            if (saved) return Number(saved)
+        }
+        return 5
+    })
+
+    // Debounce search
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm)
+            setCurrentPage(1)
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [searchTerm])
 
     React.useEffect(() => {
         loadData()
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, debouncedSearch, limit])
 
     // When defaultCurrency changes, recalculate ALL cart items payments immediately
     React.useEffect(() => {
@@ -132,15 +149,29 @@ export function SalesTable() {
 
     const loadData = async () => {
         setLoading(true)
-        const [salesData, prods, exchange] = await Promise.all([
-            api.getSales(),
-            api.getProducts(),
-            api.getExchangeRates()
-        ])
-        setSales(salesData)
-        setProducts(prods)
-        setRates(exchange)
-        setLoading(false)
+        try {
+            const [salesRes, prodsRes, exchange] = await Promise.all([
+                api.getSales({
+                    page: currentPage,
+                    limit: limit,
+                    search: debouncedSearch || undefined
+                }),
+                api.getProducts({ limit: 100 }), // large limit for cart selection
+                api.getExchangeRates()
+            ])
+            setSales(salesRes.data)
+            setTotalPages(salesRes.meta.totalPages)
+            setProducts(prodsRes.data)
+            setRates(exchange)
+
+            if (currentPage > 1 && salesRes.data.length === 0 && salesRes.meta.total > 0) {
+                setCurrentPage(salesRes.meta.totalPages);
+            }
+        } catch (error) {
+            console.error("Error loading sales", error);
+        } finally {
+            setLoading(false)
+        }
     }
 
     const resetForm = () => {
@@ -250,7 +281,15 @@ export function SalesTable() {
     return (
         <div className="space-y-8">
             <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Historial de Ventas</h2>
+                <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+                    <h2 className="text-xl font-semibold hidden sm:block">Historial de Ventas</h2>
+                    <Input
+                        placeholder="Buscar por estado (ej. pagado)..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-xs"
+                    />
+                </div>
                 <Dialog open={isCreateOpen} onOpenChange={(val) => {
                     setIsCreateOpen(val);
                     if (!val) resetForm();
@@ -442,11 +481,11 @@ export function SalesTable() {
                         ) : sales.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                                    No hay ventas registradas.
+                                    {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            paginatedSales.map((sale) => {
+                            sales.map((sale) => {
                                 return (
                                     <TableRow key={sale.id}>
                                         <TableCell className="font-medium">
@@ -476,29 +515,72 @@ export function SalesTable() {
                 </Table>
             </div>
 
-            {totalPages > 1 && (
-                <Pagination className="mt-4">
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                        <PaginationItem>
-                            <span className="text-sm text-muted-foreground px-4">
-                                Página {currentPage} de {totalPages}
-                            </span>
-                        </PaginationItem>
-                        <PaginationItem>
-                            <PaginationNext
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
+                    <span>Mostrar</span>
+                    <Select
+                        value={limit.toString()}
+                        onValueChange={(val) => {
+                            setLimit(Number(val));
+                            localStorage.setItem("invenda_sales_limit", val)
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={limit} />
+                        </SelectTrigger>
+                        <SelectContent side="top">
+                            {[5, 10, 20, 50].map((pageSize) => (
+                                <SelectItem key={pageSize} value={`${pageSize}`}>
+                                    {pageSize}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <span>registros por página</span>
+                </div>
+
+                {totalPages > 1 && (
+                    <Pagination className="w-auto mx-0 sm:mx-auto">
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+
+                            {/* Render numbered pages */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <PaginationItem key={page} className="hidden sm:inline-block">
+                                    <Button
+                                        variant={currentPage === page ? "outline" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setCurrentPage(page)}
+                                        className="w-9 h-9"
+                                    >
+                                        {page}
+                                    </Button>
+                                </PaginationItem>
+                            ))}
+
+                            {/* Mobile short display */}
+                            <PaginationItem className="sm:hidden">
+                                <span className="text-sm text-muted-foreground px-4">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                            </PaginationItem>
+
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                )}
+            </div>
 
             {/* Sale Details Dialog */}
             <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
@@ -525,7 +607,7 @@ export function SalesTable() {
                                     <TableBody>
                                         {selectedSale.items.map((item, idx) => {
                                             const pProd = products.find(p => p.id === item.productId);
-                                            const name = pProd ? pProd.name : "Producto Eliminado";
+                                            const name = pProd ? pProd.name : "Producto"; // fallback since we map
                                             return (
                                                 <TableRow key={idx}>
                                                     <TableCell className="font-medium align-top py-3">{name}</TableCell>

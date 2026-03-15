@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/pagination"
 import { Edit, Plus, Trash2, ArrowUpDown } from "lucide-react"
 
-export function ProductsTable() {
+export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
     const [products, setProducts] = React.useState<Product[]>([])
     const [categories, setCategories] = React.useState<Category[]>([])
     const [loading, setLoading] = React.useState(true)
@@ -66,14 +66,63 @@ export function ProductsTable() {
     const [status, setStatus] = React.useState<"1" | "2">("1")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-    // Pagination states
+    // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
-    const ITEMS_PER_PAGE = 5
+    const [totalPages, setTotalPages] = React.useState(1)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [debouncedSearch, setDebouncedSearch] = React.useState("")
+    const [limit, setLimit] = React.useState<number>(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("invenda_products_limit")
+            if (saved) return Number(saved)
+        }
+        return 5
+    })
 
-    // Sorting state
+    // Sorting state (kept for visual consistency, though server might need it later)
     const [sortOrder, setSortOrder] = React.useState<"asc" | "desc" | null>(null)
 
-    // Derived states
+    // Debounce search
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm)
+            setCurrentPage(1)
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [searchTerm])
+
+    React.useEffect(() => {
+        loadData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, debouncedSearch, refreshTrigger, limit])
+
+    const loadData = async () => {
+        setLoading(true)
+        try {
+            const [prodsRes, catsRes] = await Promise.all([
+                api.getProducts({
+                    page: currentPage,
+                    limit: limit,
+                    search: debouncedSearch || undefined
+                }),
+                // Consider fetching all categories for the dropdown, bypassing pagination if possible
+                // For now, we fetch a large limit just for the dropdown, or use the paginated one
+                api.getCategories({ limit: 100 })
+            ])
+            setProducts(prodsRes.data)
+            setTotalPages(prodsRes.meta.totalPages)
+            setCategories(catsRes.data) // Using .data because getCategories is now PaginatedResponse
+
+            if (currentPage > 1 && prodsRes.data.length === 0 && prodsRes.meta.total > 0) {
+                setCurrentPage(prodsRes.meta.totalPages);
+            }
+        } catch (error) {
+            console.error("Error loading products", error);
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const sortedProducts = React.useMemo(() => {
         if (!sortOrder) return products;
         return [...products].sort((a, b) => {
@@ -81,24 +130,6 @@ export function ProductsTable() {
             return b.stock - a.stock;
         });
     }, [products, sortOrder]);
-
-    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / ITEMS_PER_PAGE))
-    const paginatedProducts = sortedProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-
-    React.useEffect(() => {
-        loadData()
-    }, [])
-
-    const loadData = async () => {
-        setLoading(true)
-        const [prods, cats] = await Promise.all([
-            api.getProducts(),
-            api.getCategories()
-        ])
-        setProducts(prods)
-        setCategories(cats)
-        setLoading(false)
-    }
 
     const resetForm = () => {
         setName("")
@@ -166,14 +197,22 @@ export function ProductsTable() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Productos</h2>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto flex-1">
+                    <h2 className="text-xl font-semibold hidden sm:block">Productos</h2>
+                    <Input
+                        placeholder="Buscar producto..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-xs"
+                    />
+                </div>
                 <Dialog open={isCreateOpen} onOpenChange={(val) => {
                     setIsCreateOpen(val);
                     if (!val) resetForm();
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button size="sm" className="w-full sm:w-auto">
                             <Plus className="w-4 h-4 mr-2" />
                             Nuevo Producto
                         </Button>
@@ -269,18 +308,18 @@ export function ProductsTable() {
                         ) : products.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                    No hay productos registrados.
+                                    {debouncedSearch ? "No se encontraron productos." : "No hay productos registrados."}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            paginatedProducts.map((prod) => (
+                            sortedProducts.map((prod) => (
                                 <TableRow key={prod.id}>
                                     <TableCell className="font-medium">{prod.name}</TableCell>
                                     <TableCell>
                                         {prod.status === 1 ? (
-                                            <Badge className="w-[100px] justify-center bg-green-500 hover:bg-green-600 text-white shadow-sm border-0 font-medium">Activo 🟢</Badge>
+                                            <Badge className="w-[100px] justify-center bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">Activo </Badge>
                                         ) : (
-                                            <Badge variant="destructive" className="w-[100px] justify-center shadow-sm border-0 font-medium">Inactivo 🔴</Badge>
+                                            <Badge variant="destructive" className="w-[100px] justify-center bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">Inactivo </Badge>
                                         )}
                                     </TableCell>
                                     <TableCell>{getCategoryName(prod.categoryId)}</TableCell>
@@ -324,29 +363,72 @@ export function ProductsTable() {
                 </Table>
             </div>
 
-            {totalPages > 1 && (
-                <Pagination className="mt-4">
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                        <PaginationItem>
-                            <span className="text-sm text-muted-foreground px-4">
-                                Página {currentPage} de {totalPages}
-                            </span>
-                        </PaginationItem>
-                        <PaginationItem>
-                            <PaginationNext
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
+                    <span>Mostrar</span>
+                    <Select
+                        value={limit.toString()}
+                        onValueChange={(val) => {
+                            setLimit(Number(val));
+                            localStorage.setItem("invenda_products_limit", val);
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={limit} />
+                        </SelectTrigger>
+                        <SelectContent side="top">
+                            {[5, 10, 20, 50].map((pageSize) => (
+                                <SelectItem key={pageSize} value={`${pageSize}`}>
+                                    {pageSize}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <span>registros por página</span>
+                </div>
+
+                {totalPages > 1 && (
+                    <Pagination className="w-auto mx-0 sm:mx-auto">
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+
+                            {/* Render numbered pages */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <PaginationItem key={page} className="hidden sm:inline-block">
+                                    <Button
+                                        variant={currentPage === page ? "outline" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setCurrentPage(page)}
+                                        className="w-9 h-9"
+                                    >
+                                        {page}
+                                    </Button>
+                                </PaginationItem>
+                            ))}
+
+                            {/* Mobile short display */}
+                            <PaginationItem className="sm:hidden">
+                                <span className="text-sm text-muted-foreground px-4">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                            </PaginationItem>
+
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                )}
+            </div>
 
             {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={(val) => {

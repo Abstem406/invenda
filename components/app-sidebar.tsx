@@ -12,10 +12,11 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Home, Package, DollarSign, Settings, User2, Moon, Sun, ShoppingCart } from "lucide-react"
+import { Home, Package, DollarSign, Settings, User2, Moon, Sun, ShoppingCart, LogOut } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
+import { useAuth } from "@/lib/auth-context"
 
 import {
     DropdownMenu,
@@ -47,11 +48,34 @@ const items = [
         url: "/sales",
         icon: ShoppingCart,
     },
+    {
+        title: "Usuarios",
+        url: "/users",
+        icon: User2,
+    },
 ]
 
 export function AppSidebar() {
     const pathname = usePathname()
+    const router = useRouter()
     const { setTheme } = useTheme()
+    const { user, logout } = useAuth()
+
+    const handleLogout = async () => {
+        await logout()
+        router.push("/login")
+    }
+
+    // Display name fallback chain: name -> email prefix -> "Usuario"
+    const displayName = user?.name || user?.email?.split("@")[0] || "Usuario"
+    const displayEmail = user?.email || ""
+    const displayRole = user?.role === "ADMIN" ? "Administrador" : "Cajero"
+
+    // Filter items based on role
+    const filteredItems = items.filter(item => {
+        if (item.title === "Usuarios" && user?.role !== "ADMIN") return false;
+        return true;
+    });
 
     return (
         <Sidebar collapsible="icon" className="w-[280px]">
@@ -66,7 +90,7 @@ export function AppSidebar() {
                     <SidebarGroupLabel className="text-sm">Menú Principal</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu className="gap-3 mt-4">
-                            {items.map((item) => (
+                            {filteredItems.map((item) => (
                                 <SidebarMenuItem key={item.title}>
                                     <SidebarMenuButton
                                         asChild
@@ -96,8 +120,8 @@ export function AppSidebar() {
                                             <User2 className="size-4" />
                                         </div>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
-                                            <span className="truncate font-semibold">Usuario Admin</span>
-                                            <span className="truncate text-xs">admin@invenda.com</span>
+                                            <span className="truncate font-semibold">{displayName}</span>
+                                            <span className="truncate text-xs">{displayRole}</span>
                                         </div>
                                     </div>
                                     <Settings className="ml-auto size-4" />
@@ -106,8 +130,8 @@ export function AppSidebar() {
                             <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg" align="end" side="right" sideOffset={4}>
                                 <DropdownMenuLabel className="font-normal">
                                     <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">Usuario Admin</p>
-                                        <p className="text-xs leading-none text-muted-foreground">admin@invenda.com</p>
+                                        <p className="text-sm font-medium leading-none">{displayName}</p>
+                                        <p className="text-xs leading-none text-muted-foreground">{displayEmail}</p>
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
@@ -120,13 +144,9 @@ export function AppSidebar() {
                                     <span>Modo Oscuro</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem>
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>Configuración General</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                    <User2 className="mr-2 h-4 w-4" />
-                                    <span>Perfil de Usuario</span>
+                                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    <span>Cerrar Sesión</span>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -136,3 +156,4 @@ export function AppSidebar() {
         </Sidebar>
     )
 }
+

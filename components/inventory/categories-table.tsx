@@ -39,9 +39,16 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { Edit, Plus, Trash2 } from "lucide-react"
 
-export function CategoriesTable() {
+export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
     const [categories, setCategories] = React.useState<Category[]>([])
     const [loading, setLoading] = React.useState(true)
 
@@ -54,21 +61,52 @@ export function CategoriesTable() {
     const [name, setName] = React.useState("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-    // Pagination states
+    // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
-    const ITEMS_PER_PAGE = 5
-    const totalPages = Math.max(1, Math.ceil(categories.length / ITEMS_PER_PAGE))
-    const paginatedCategories = categories.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    const [totalPages, setTotalPages] = React.useState(1)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [debouncedSearch, setDebouncedSearch] = React.useState("")
+    const [limit, setLimit] = React.useState<number>(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("invenda_categories_limit")
+            if (saved) return Number(saved)
+        }
+        return 5
+    })
+
+    // Debounce search
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm)
+            setCurrentPage(1) // Reset to page 1 on new search
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [searchTerm])
 
     React.useEffect(() => {
         loadCategories()
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, debouncedSearch, refreshTrigger, limit])
 
     const loadCategories = async () => {
         setLoading(true)
-        const data = await api.getCategories()
-        setCategories(data)
-        setLoading(false)
+        try {
+            const res = await api.getCategories({
+                page: currentPage,
+                limit: limit,
+                search: debouncedSearch || undefined
+            });
+            setCategories(res.data)
+            setTotalPages(res.meta.totalPages)
+            // Safety check if we deleted the last item on a page
+            if (currentPage > 1 && res.data.length === 0 && res.meta.total > 0) {
+                setCurrentPage(res.meta.totalPages);
+            }
+        } catch (error) {
+            console.error("Error loading categories", error);
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleCreate = async (e: React.FormEvent) => {
@@ -107,16 +145,24 @@ export function CategoriesTable() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Categorías</h2>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+                    <h2 className="text-xl font-semibold hidden sm:block">Categorías</h2>
+                    <Input
+                        placeholder="Buscar categoría..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-xs"
+                    />
+                </div>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button size="sm" className="w-full sm:w-auto">
                             <Plus className="w-4 h-4 mr-2" />
                             Nueva Categoría
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
                             <DialogTitle>Crear Categoría</DialogTitle>
                             <DialogDescription>
@@ -158,11 +204,11 @@ export function CategoriesTable() {
                         ) : categories.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={2} className="h-24 text-center text-muted-foreground">
-                                    No hay categorías registradas.
+                                    {debouncedSearch ? "No se encontraron categorías." : "No hay categorías registradas."}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            paginatedCategories.map((cat) => (
+                            categories.map((cat) => (
                                 <TableRow key={cat.id}>
                                     <TableCell className="font-medium">{cat.name}</TableCell>
                                     <TableCell className="text-right">
@@ -204,29 +250,72 @@ export function CategoriesTable() {
                 </Table>
             </div>
 
-            {totalPages > 1 && (
-                <Pagination className="mt-4">
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                        <PaginationItem>
-                            <span className="text-sm text-muted-foreground px-4">
-                                Página {currentPage} de {totalPages}
-                            </span>
-                        </PaginationItem>
-                        <PaginationItem>
-                            <PaginationNext
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
+                    <span>Mostrar</span>
+                    <Select
+                        value={limit.toString()}
+                        onValueChange={(val) => {
+                            setLimit(Number(val));
+                            localStorage.setItem("invenda_categories_limit", val);
+                            setCurrentPage(1); // Reset to page 1 on limit change
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={limit} />
+                        </SelectTrigger>
+                        <SelectContent side="top">
+                            {[5, 10, 20, 50].map((pageSize) => (
+                                <SelectItem key={pageSize} value={`${pageSize}`}>
+                                    {pageSize}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <span>registros por página</span>
+                </div>
+
+                {totalPages > 1 && (
+                    <Pagination className="w-auto mx-0 sm:mx-auto">
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+
+                            {/* Render numbered pages */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <PaginationItem key={page} className="hidden sm:inline-block">
+                                    <Button
+                                        variant={currentPage === page ? "outline" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setCurrentPage(page)}
+                                        className="w-9 h-9"
+                                    >
+                                        {page}
+                                    </Button>
+                                </PaginationItem>
+                            ))}
+
+                            {/* Mobile short display */}
+                            <PaginationItem className="sm:hidden">
+                                <span className="text-sm text-muted-foreground px-4">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                            </PaginationItem>
+
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                )}
+            </div>
 
             {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={(open) => {

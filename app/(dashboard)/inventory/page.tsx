@@ -23,7 +23,7 @@ export default function InventoryPage() {
                             Categorías de productos
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogContent className="sm:max-w-lg">
                         <DialogHeader className="mb-4">
                             <DialogTitle>Gestión de Categorías</DialogTitle>
                             <DialogDescription>

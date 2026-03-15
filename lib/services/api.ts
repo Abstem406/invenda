@@ -1,5 +1,17 @@
-import categoriesData from "../data/categories.json";
-import productsData from "../data/products.json";
+// Auth types
+export interface User {
+    id: string;
+    email: string;
+    name: string | null;
+    role: "ADMIN" | "CAJERO";
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface LoginCredentials {
+    email: string;
+    password: string;
+}
 
 export interface Category {
     id: string;
@@ -58,130 +70,228 @@ export interface Sale {
     status: "pagado" | "fiado" | "debiendo";
 }
 
-// In-memory data store for the lifetime of the session.
-// In Next.js dev server, this state drops on reload if not persistent,
-// which is fine for UI mock purposes.
-let _categories = [...categoriesData] as Category[];
-let _products = [...productsData] as Product[];
-let _sales: Sale[] = []; // Empty initially
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 
-// Default global exchange rates for the simulation
-// Persist to localStorage so values survive page reloads
-const RATES_STORAGE_KEY = "invenda_exchange_rates";
+// Flag to prevent concurrent refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
 
-const loadRatesFromStorage = (): ExchangeRates => {
-    if (typeof window !== "undefined") {
-        try {
-            const stored = localStorage.getItem(RATES_STORAGE_KEY);
-            if (stored) return JSON.parse(stored) as ExchangeRates;
-        } catch { /* ignore parse errors, fall back to defaults */ }
+// Try to refresh the access token using the refresh token cookie
+async function tryRefresh(): Promise<boolean> {
+    try {
+        const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            method: "POST",
+            credentials: "include",
+        });
+        return res.ok;
+    } catch {
+        return false;
     }
-    return { cop: 5, bcv: 435, copUsd: 3754 };
-};
+}
 
-const saveRatesToStorage = (rates: ExchangeRates) => {
-    if (typeof window !== "undefined") {
-        localStorage.setItem(RATES_STORAGE_KEY, JSON.stringify(rates));
+// Generic fetch handler with error throwing and auto-refresh on 401
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+            ...options?.headers,
+        },
+    });
+
+    // Auto-refresh on 401 Unauthorized (except for auth endpoints themselves)
+    if (res.status === 401 && !endpoint.startsWith("/auth/")) {
+        if (!isRefreshing) {
+            isRefreshing = true;
+            refreshPromise = tryRefresh().finally(() => {
+                isRefreshing = false;
+                refreshPromise = null;
+            });
+        }
+
+        const refreshed = await (refreshPromise ?? tryRefresh());
+
+        if (refreshed) {
+            // Retry the original request with new token
+            const retryRes = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                credentials: "include",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...options?.headers,
+                },
+            });
+
+            if (!retryRes.ok) {
+                throw new Error(`API Error: ${retryRes.status} ${retryRes.statusText}`);
+            }
+
+            if (retryRes.status === 204) {
+                return undefined as T;
+            }
+
+            return retryRes.json();
+        }
+
+        // Refresh failed — redirect to login
+        if (typeof window !== "undefined") {
+            window.location.href = "/login";
+        }
+        throw new Error("Session expired");
     }
+
+    if (!res.ok) {
+        throw new Error(`API Error: ${res.status} ${res.statusText}`);
+    }
+
+    // Handle 204 No Content for DELETE
+    if (res.status === 204) {
+        return undefined as T;
+    }
+
+    return res.json();
+}
+
+// Pagination types
+export interface PaginationMeta {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+    data: T[];
+    meta: PaginationMeta;
+}
+
+export interface QueryParams {
+    page?: number;
+    limit?: number;
+    search?: string;
+}
+
+const buildQueryString = (params?: QueryParams) => {
+    if (!params) return "";
+    const query = new URLSearchParams();
+    if (params.page !== undefined) query.append("page", params.page.toString());
+    if (params.limit !== undefined) query.append("limit", params.limit.toString());
+    if (params.search !== undefined) query.append("search", params.search);
+    const queryString = query.toString();
+    return queryString ? `?${queryString}` : "";
 };
-
-let _exchangeRates: ExchangeRates = loadRatesFromStorage();
-
-// Helper for simulated delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const api = {
+    // Auth
+    auth: {
+        login: async (credentials: LoginCredentials): Promise<User> => {
+            const data = await fetchApi<{ message: string; user: User }>("/auth/login", {
+                method: "POST",
+                body: JSON.stringify(credentials),
+            });
+            return data.user;
+        },
+        logout: async (): Promise<void> => {
+            return fetchApi<void>("/auth/logout", {
+                method: "POST",
+            });
+        },
+        refresh: async (): Promise<void> => {
+            return fetchApi<void>("/auth/refresh", {
+                method: "POST",
+            });
+        },
+        me: async (): Promise<User> => {
+            // El endpoint me podría devolver { user: ... } o solo el User.
+            // Asumiendo que es consistente con login y por la prueba del usuario, devolvemos el objeto User.
+            // Ajustar si el endpoint también envuelve la respuesta.
+            return fetchApi<User>("/auth/me");
+        },
+    },
+
+    // Users
+    getUsers: async (params?: QueryParams): Promise<PaginatedResponse<User>> => {
+        return fetchApi<PaginatedResponse<User>>(`/users${buildQueryString(params)}`);
+    },
+    createUser: async (user: Omit<User, "id" | "createdAt" | "updatedAt"> & { password?: string }): Promise<User> => {
+        return fetchApi<User>("/users", {
+            method: "POST",
+            body: JSON.stringify(user),
+        });
+    },
+
     // Categories
-    getCategories: async (): Promise<Category[]> => {
-        await delay(300);
-        return [..._categories];
+    getCategories: async (params?: QueryParams): Promise<PaginatedResponse<Category>> => {
+        return fetchApi<PaginatedResponse<Category>>(`/categories${buildQueryString(params)}`);
     },
     createCategory: async (category: Omit<Category, "id">): Promise<Category> => {
-        await delay(500);
-        const newCategory = { ...category, id: `cat-${Date.now()}` };
-        _categories.push(newCategory);
-        return newCategory;
+        return fetchApi<Category>("/categories", {
+            method: "POST",
+            body: JSON.stringify(category),
+        });
     },
     updateCategory: async (id: string, name: string): Promise<Category> => {
-        await delay(500);
-        const index = _categories.findIndex(c => c.id === id);
-        if (index === -1) throw new Error("Category not found");
-        _categories[index] = { ..._categories[index], name };
-        return _categories[index];
+        return fetchApi<Category>(`/categories/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name }),
+        });
     },
     deleteCategory: async (id: string): Promise<void> => {
-        await delay(500);
-        _categories = _categories.filter(c => c.id !== id);
-        // Also remove or update products with this category if needed
-        // Assuming for now it just cascades to empty
+        return fetchApi<void>(`/categories/${id}`, {
+            method: "DELETE",
+        });
     },
 
     // Products
-    getProducts: async (): Promise<Product[]> => {
-        await delay(300);
-        return [..._products];
+    getProducts: async (params?: QueryParams): Promise<PaginatedResponse<Product>> => {
+        return fetchApi<PaginatedResponse<Product>>(`/products${buildQueryString(params)}`);
     },
     createProduct: async (product: Omit<Product, "id">): Promise<Product> => {
-        await delay(500);
-        const newProduct = { ...product, id: `prod-${Date.now()}` };
-        _products.push(newProduct);
-        return newProduct;
+        return fetchApi<Product>("/products", {
+            method: "POST",
+            body: JSON.stringify(product),
+        });
     },
     updateProduct: async (id: string, updates: Partial<Product>): Promise<Product> => {
-        await delay(500);
-        const index = _products.findIndex(p => p.id === id);
-        if (index === -1) throw new Error("Product not found");
-        _products[index] = { ..._products[index], ...updates };
-        return _products[index];
+        return fetchApi<Product>(`/products/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(updates),
+        });
     },
     deleteProduct: async (id: string): Promise<void> => {
-        await delay(500);
-        _products = _products.filter(p => p.id !== id);
+        return fetchApi<void>(`/products/${id}`, {
+            method: "DELETE",
+        });
     },
 
     // Update prices only
     updatePrices: async (id: string, prices: Prices): Promise<Product> => {
-        await delay(300);
-        const index = _products.findIndex(p => p.id === id);
-        if (index === -1) throw new Error("Product not found");
-        _products[index] = { ..._products[index], prices: { ...prices } };
-        return _products[index];
+        return fetchApi<Product>(`/products/${id}/prices`, {
+            method: "PATCH",
+            body: JSON.stringify(prices),
+        });
     },
 
     // Exchange Rates
     getExchangeRates: async (): Promise<ExchangeRates> => {
-        await delay(200);
-        return { ..._exchangeRates };
+        return fetchApi<ExchangeRates>("/exchange-rates");
     },
     updateExchangeRates: async (rates: ExchangeRates): Promise<ExchangeRates> => {
-        await delay(300);
-        _exchangeRates = { ...rates };
-        saveRatesToStorage(_exchangeRates);
-        return { ..._exchangeRates };
+        return fetchApi<ExchangeRates>("/exchange-rates", {
+            method: "PUT",
+            body: JSON.stringify(rates),
+        });
     },
 
     // Sales
-    getSales: async (): Promise<Sale[]> => {
-        await delay(300);
-        return [..._sales];
+    getSales: async (params?: QueryParams): Promise<PaginatedResponse<Sale>> => {
+        return fetchApi<PaginatedResponse<Sale>>(`/sales${buildQueryString(params)}`);
     },
     createSale: async (sale: Omit<Sale, "id" | "date">): Promise<Sale> => {
-        await delay(500);
-        const newSale: Sale = {
-            ...sale,
-            id: `sale-${Date.now()}`,
-            date: new Date().toISOString()
-        };
-        _sales.push(newSale);
-
-        // Deduct stock from products
-        for (const item of newSale.items) {
-            const pIdx = _products.findIndex(p => p.id === item.productId);
-            if (pIdx > -1) {
-                _products[pIdx].stock = Math.max(0, _products[pIdx].stock - item.quantity);
-            }
-        }
-
-        return newSale;
-    }
+        return fetchApi<Sale>("/sales", {
+            method: "POST",
+            body: JSON.stringify(sale),
+        });
+    },
 };

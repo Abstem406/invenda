@@ -72,9 +72,16 @@ export function PricesTable() {
 
     // Pagination states
     const [currentPage, setCurrentPage] = React.useState(1)
-    const ITEMS_PER_PAGE = 5
-    const totalPages = Math.max(1, Math.ceil(products.length / ITEMS_PER_PAGE))
-    const paginatedProducts = products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    const [limit, setLimit] = React.useState<number>(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("invenda_prices_limit")
+            if (saved) return Number(saved)
+        }
+        return 5
+    })
+
+    const totalPages = Math.max(1, Math.ceil(products.length / limit))
+    const paginatedProducts = products.slice((currentPage - 1) * limit, currentPage * limit)
 
     React.useEffect(() => {
         loadData()
@@ -82,13 +89,13 @@ export function PricesTable() {
 
     const loadData = async () => {
         setLoading(true)
-        const [prods, cats, exchange] = await Promise.all([
-            api.getProducts(),
-            api.getCategories(),
+        const [prodsRes, catsRes, exchange] = await Promise.all([
+            api.getProducts({ limit: 1000 }), // In PricesTable we need all/many products to edit
+            api.getCategories({ limit: 100 }),
             api.getExchangeRates()
         ])
-        setProducts(prods)
-        setCategories(cats)
+        setProducts(prodsRes.data)
+        setCategories(catsRes.data)
         setRates(exchange)
         setLoading(false)
     }
@@ -131,8 +138,8 @@ export function PricesTable() {
 
         // Recalculate all products' usdFisico based on new copUsd rate
         // COP is the source of truth, usdFisico = cop / copUsd
-        const allProducts = await api.getProducts();
-        for (const prod of allProducts) {
+        const allProductsRes = await api.getProducts({ limit: 1000 });
+        for (const prod of allProductsRes.data) {
             if (prod.prices.cop > 0) {
                 const newUsdFisico = parseFloat((prod.prices.cop / newRates.copUsd).toFixed(2));
                 await api.updatePrices(prod.id, {
@@ -472,9 +479,33 @@ export function PricesTable() {
                 </Table>
             </div>
 
-            {
-                totalPages > 1 && (
-                    <Pagination className="mt-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
+                    <span>Mostrar</span>
+                    <Select
+                        value={limit.toString()}
+                        onValueChange={(val) => {
+                            setLimit(Number(val));
+                            localStorage.setItem("invenda_prices_limit", val);
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={limit} />
+                        </SelectTrigger>
+                        <SelectContent side="top">
+                            {[5, 10, 20, 50].map((pageSize) => (
+                                <SelectItem key={pageSize} value={`${pageSize}`}>
+                                    {pageSize}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <span>registros por página</span>
+                </div>
+
+                {totalPages > 1 && (
+                    <Pagination className="w-auto mx-0 sm:mx-auto">
                         <PaginationContent>
                             <PaginationItem>
                                 <PaginationPrevious
@@ -482,11 +513,28 @@ export function PricesTable() {
                                     className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                                 />
                             </PaginationItem>
-                            <PaginationItem>
+
+                            {/* Render numbered pages */}
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <PaginationItem key={page} className="hidden sm:inline-block">
+                                    <Button
+                                        variant={currentPage === page ? "outline" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setCurrentPage(page)}
+                                        className="w-9 h-9"
+                                    >
+                                        {page}
+                                    </Button>
+                                </PaginationItem>
+                            ))}
+
+                            {/* Mobile short display */}
+                            <PaginationItem className="sm:hidden">
                                 <span className="text-sm text-muted-foreground px-4">
                                     Página {currentPage} de {totalPages}
                                 </span>
                             </PaginationItem>
+
                             <PaginationItem>
                                 <PaginationNext
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
@@ -495,8 +543,8 @@ export function PricesTable() {
                             </PaginationItem>
                         </PaginationContent>
                     </Pagination>
-                )
-            }
+                )}
+            </div>
 
             {/* Edit Prices Dialog */}
             <Dialog open={isEditOpen} onOpenChange={(val) => {
