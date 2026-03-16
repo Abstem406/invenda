@@ -70,8 +70,10 @@ export function PricesTable() {
 
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-    // Pagination states
+    // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [debouncedSearch, setDebouncedSearch] = React.useState("")
     const [limit, setLimit] = React.useState<number>(() => {
         if (typeof window !== "undefined") {
             const saved = localStorage.getItem("invenda_prices_limit")
@@ -80,17 +82,24 @@ export function PricesTable() {
         return 5
     })
 
-    const totalPages = Math.max(1, Math.ceil(products.length / limit))
-    const paginatedProducts = products.slice((currentPage - 1) * limit, currentPage * limit)
+    // Debounce search
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm)
+            setCurrentPage(1)
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [searchTerm])
 
     React.useEffect(() => {
         loadData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const loadData = async () => {
         setLoading(true)
         const [prodsRes, catsRes, exchange] = await Promise.all([
-            api.getProducts({ limit: 1000 }), // In PricesTable we need all/many products to edit
+            api.getProducts({ limit: 1000 }), // Get a large batch for local derivation
             api.getCategories({ limit: 100 }),
             api.getExchangeRates()
         ])
@@ -99,6 +108,17 @@ export function PricesTable() {
         setRates(exchange)
         setLoading(false)
     }
+
+    // Derived states for UI separation
+    const filteredProducts = React.useMemo(() => {
+        return products.filter(p => p.name.toLowerCase().includes(debouncedSearch.toLowerCase()));
+    }, [products, debouncedSearch]);
+
+    const pricedProducts = filteredProducts.filter(p => p.price);
+    const unpricedProducts = products.filter(p => !p.price);
+
+    const totalPages = Math.max(1, Math.ceil(pricedProducts.length / limit));
+    const paginatedProducts = pricedProducts.slice((currentPage - 1) * limit, currentPage * limit);
 
     const resetForm = () => {
         setSelectedProductId("")
@@ -140,10 +160,10 @@ export function PricesTable() {
         // COP is the source of truth, usdFisico = cop / copUsd
         const allProductsRes = await api.getProducts({ limit: 1000 });
         for (const prod of allProductsRes.data) {
-            if (prod.prices.cop > 0) {
-                const newUsdFisico = parseFloat((prod.prices.cop / newRates.copUsd).toFixed(2));
+            if (prod.price && prod.price.cop > 0) {
+                const newUsdFisico = parseFloat((prod.price.cop / newRates.copUsd).toFixed(2));
                 await api.updatePrices(prod.id, {
-                    ...prod.prices,
+                    ...prod.price,
                     usdFisico: newUsdFisico
                 });
             }
@@ -213,21 +233,27 @@ export function PricesTable() {
 
     const openEdit = (prod: Product) => {
         setCurrentProduct(prod)
-        setUsdTarjeta(prod.prices.usdTarjeta?.toString() || "0")
-        setUsdFisico(prod.prices.usdFisico?.toString() || "0")
-        setCop(prod.prices.cop.toString())
-        setExchangeType(prod.prices.exchangeType)
-        setIsCustomVes(prod.prices.isCustomVes || false)
-        setCustomVes(prod.prices.ves.toString())
+        setUsdTarjeta(prod.price?.usdTarjeta?.toString() || "0")
+        setUsdFisico(prod.price?.usdFisico?.toString() || "0")
+        setCop(prod.price?.cop?.toString() || "0")
+        setExchangeType(prod.price?.exchangeType || "usd")
+        setIsCustomVes(prod.price?.isCustomVes || false)
+        setCustomVes(prod.price?.ves?.toString() || "0")
         setIsEditOpen(true)
     }
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-xl font-semibold">Listado de Precios</h2>
-                    <Button variant="outline" size="sm" onClick={openRatesConfig}>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto flex-1">
+                    <h2 className="text-xl font-semibold hidden sm:block">Precios</h2>
+                    <Input
+                        placeholder="Buscar producto..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-xs"
+                    />
+                    <Button variant="outline" size="sm" onClick={openRatesConfig} className="w-full sm:w-auto">
                         <Settings2 className="w-4 h-4 mr-2" />
                         Tasas de Cambio
                     </Button>
@@ -257,9 +283,13 @@ export function PricesTable() {
                                         <SelectValue placeholder="Selecciona un producto del inventario" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {products.map(p => (
-                                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                        ))}
+                                        {unpricedProducts.length === 0 ? (
+                                            <SelectItem value="none" disabled>Todos los productos tienen precio asignado</SelectItem>
+                                        ) : (
+                                            unpricedProducts.map(p => (
+                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                            ))
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -449,22 +479,25 @@ export function PricesTable() {
                                     Cargando...
                                 </TableCell>
                             </TableRow>
-                        ) : products.length === 0 ? (
+                        ) : pricedProducts.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                    No hay productos para mostrar.
+                                    {debouncedSearch ? "No se encontraron precios." : "No hay precios asignados."}
                                 </TableCell>
                             </TableRow>
                         ) : (
                             paginatedProducts.map((prod) => {
-                                const dynamicVes = prod.prices.isCustomVes ? prod.prices.ves : calculateVes(prod.prices.exchangeType, prod.prices.usdTarjeta, prod.prices.cop);
+                                // (Safety guard, though unpriced products are already filtered out)
+                                if (!prod.price) return null;
+
+                                const dynamicVes = prod.price.isCustomVes ? prod.price.ves : calculateVes(prod.price.exchangeType, prod.price.usdTarjeta, prod.price.cop);
 
                                 return (
                                     <TableRow key={prod.id}>
                                         <TableCell className="font-medium">{prod.name}</TableCell>
-                                        <TableCell>${prod.prices.usdTarjeta?.toFixed(2) || '0.00'}</TableCell>
-                                        <TableCell>${(prod.prices.cop / rates.copUsd).toFixed(2)}</TableCell>
-                                        <TableCell>${prod.prices.cop.toLocaleString('es-CO')}</TableCell>
+                                        <TableCell>${prod.price.usdTarjeta?.toFixed(2) || '0.00'}</TableCell>
+                                        <TableCell>${(prod.price.cop / rates.copUsd).toFixed(2)}</TableCell>
+                                        <TableCell>${prod.price.cop.toLocaleString('es-CO')}</TableCell>
                                         <TableCell>Bs. {dynamicVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>

@@ -20,6 +20,17 @@ import {
     DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import {
     Pagination,
@@ -35,7 +46,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Plus, Search, ShieldAlert } from "lucide-react"
+import { Edit, Plus, Search, ShieldAlert, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 
 export function UsersTable() {
@@ -51,6 +62,14 @@ export function UsersTable() {
     const [password, setPassword] = React.useState("")
     const [role, setRole] = React.useState<"ADMIN" | "CAJERO">("CAJERO")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+    // Edit User state
+    const [isEditOpen, setIsEditOpen] = React.useState(false)
+    const [currentUser, setCurrentUser] = React.useState<User | null>(null)
+    const [editName, setEditName] = React.useState("")
+    const [editEmail, setEditEmail] = React.useState("")
+    const [editPassword, setEditPassword] = React.useState("")
+    const [editRole, setEditRole] = React.useState<"ADMIN" | "CAJERO">("CAJERO")
 
     // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
@@ -92,6 +111,10 @@ export function UsersTable() {
             })
             setUsers(res.data || [])
             setTotalPages(res.meta?.totalPages || 1)
+            // Safety check if we deleted the last item on a page
+            if (currentPage > 1 && res.data.length === 0 && res.meta.total > 0) {
+                setCurrentPage(res.meta.totalPages)
+            }
         } catch (err: any) {
             console.error(err)
             setError(err.message || "Error al cargar usuarios")
@@ -113,7 +136,7 @@ export function UsersTable() {
                 role
             })
             setIsCreateOpen(false)
-            resetForm()
+            resetCreateForm()
             await loadUsers()
         } catch (err: any) {
             setError(err.message || "Error al crear el usuario")
@@ -122,7 +145,52 @@ export function UsersTable() {
         }
     }
 
-    const resetForm = () => {
+    const handleEditUser = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!currentUser || !editName.trim() || !editEmail.trim()) return
+        setIsSubmitting(true)
+        setError("")
+        try {
+            const updates: any = {
+                name: editName,
+                email: editEmail,
+                role: editRole,
+            }
+            // Only include password if admin typed a new one
+            if (editPassword.trim()) {
+                updates.password = editPassword
+            }
+            await api.updateUser(currentUser.id, updates)
+            setIsEditOpen(false)
+            setCurrentUser(null)
+            await loadUsers()
+        } catch (err: any) {
+            setError(err.message || "Error al actualizar el usuario")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    const handleDeleteUser = async (id: string) => {
+        try {
+            await api.deleteUser(id)
+            await loadUsers()
+        } catch (err: any) {
+            setError(err.message || "Error al eliminar el usuario")
+        }
+    }
+
+    const openEdit = (u: User) => {
+        setCurrentUser(u)
+        setEditName(u.name || "")
+        setEditEmail(u.email)
+        setEditPassword("")
+        setEditRole(u.role)
+        setError("")
+        setIsEditOpen(true)
+    }
+
+    const resetCreateForm = () => {
         setName("")
         setEmail("")
         setPassword("")
@@ -154,7 +222,7 @@ export function UsersTable() {
                 </div>
                 <Dialog open={isCreateOpen} onOpenChange={(open) => {
                     setIsCreateOpen(open)
-                    if (!open) resetForm()
+                    if (!open) resetCreateForm()
                 }}>
                     <DialogTrigger asChild>
                         <Button size="sm" className="w-full sm:w-auto">
@@ -225,26 +293,32 @@ export function UsersTable() {
                 </Dialog>
             </div>
 
-            <div className="border rounded-md">
+            {error && !isCreateOpen && !isEditOpen && (
+                <div className="text-destructive text-sm font-medium">{error}</div>
+            )}
+
+            {/* Table wrapper with overflow for responsive */}
+            <div className="border rounded-md overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Nombre</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Rol</TableHead>
-                            <TableHead>Creado en</TableHead>
+                            <TableHead className="hidden md:table-cell">Creado en</TableHead>
+                            <TableHead className="w-[100px] text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
+                                <TableCell colSpan={5} className="h-24 text-center">
                                     Cargando usuarios...
                                 </TableCell>
                             </TableRow>
                         ) : users.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                                     {debouncedSearch ? "No se encontraron usuarios que coincidan con la búsqueda." : "No hay otros usuarios registrados."}
                                 </TableCell>
                             </TableRow>
@@ -258,7 +332,42 @@ export function UsersTable() {
                                             {u.role === 'ADMIN' ? 'Admin' : 'Cajero'}
                                         </span>
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                    <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" onClick={() => openEdit(u)}>
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                            {/* Prevent deleting yourself */}
+                                            {u.id !== user?.id && (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="text-destructive">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Se eliminará permanentemente al usuario
+                                                                &quot;{u.name || u.email}&quot; del sistema.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                onClick={() => handleDeleteUser(u.id)}
+                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                            >
+                                                                Eliminar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
                             ))
                         )}
@@ -330,6 +439,75 @@ export function UsersTable() {
                     </Pagination>
                 )}
             </div>
+
+            {/* Edit User Dialog */}
+            <Dialog open={isEditOpen} onOpenChange={(open) => {
+                setIsEditOpen(open)
+                if (!open) {
+                    setCurrentUser(null)
+                    setError("")
+                }
+            }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Usuario</DialogTitle>
+                        <DialogDescription>
+                            Modifica los datos del usuario. Si ingresas una nueva contraseña, se le pedirá cambiarla al iniciar sesión.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleEditUser} className="space-y-4">
+                        {error && <div className="text-destructive text-sm font-medium">{error}</div>}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Nombre</label>
+                            <Input
+                                placeholder="Nombre del empleado"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                disabled={isSubmitting}
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Correo Electrónico</label>
+                            <Input
+                                type="email"
+                                placeholder="correo@ejemplo.com"
+                                value={editEmail}
+                                onChange={(e) => setEditEmail(e.target.value)}
+                                disabled={isSubmitting}
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Nueva Contraseña <span className="text-muted-foreground font-normal">(Opcional)</span></label>
+                            <Input
+                                type="password"
+                                placeholder="Dejar vacío para no cambiar"
+                                value={editPassword}
+                                onChange={(e) => setEditPassword(e.target.value)}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Rol</label>
+                            <Select value={editRole} onValueChange={(val: "ADMIN" | "CAJERO") => setEditRole(val)} disabled={isSubmitting}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona un rol" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ADMIN">Administrador</SelectItem>
+                                    <SelectItem value="CAJERO">Cajero</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <DialogFooter>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? "Guardando..." : "Guardar Cambios"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

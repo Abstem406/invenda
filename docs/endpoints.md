@@ -21,7 +21,12 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
 
 | Método | Ruta | Acceso | Descripción |
 |--------|------|--------|-------------|
-| `POST` | `/api/users` | Admin | Crea un nuevo usuario con rol asignado (`ADMIN` o `CAJERO`). |
+| `POST` | `/api/users` | Admin | Crea un nuevo usuario con rol asignado (`ADMIN` o `CAJERO`). `mustChangePassword` se activa automáticamente. |
+| `GET` | `/api/users` | Admin | Obtiene la lista de todos los usuarios. |
+| `GET` | `/api/users/:id` | Admin | Obtiene un usuario por su ID. |
+| `PATCH` | `/api/users/:id` | Admin | Actualiza un usuario. Si se envía `password`, `mustChangePassword` se reactiva. |
+| `DELETE` | `/api/users/:id` | Admin | Elimina un usuario. |
+| `POST` | `/api/users/change-password` | Todos | Permite al usuario autenticado cambiar su propia contraseña. Desactiva `mustChangePassword`. |
 
 **Body de `POST /api/users`:**
 ```json
@@ -30,6 +35,24 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
   "password": "123456",
   "name": "Nombre (opcional)",
   "role": "CAJERO"
+}
+```
+
+**Body de `PATCH /api/users/:id`:** *(todos los campos son opcionales)*
+```json
+{
+  "email": "otro@invenda.com",
+  "password": "nueva_password",
+  "name": "Nuevo Nombre",
+  "role": "ADMIN"
+}
+```
+
+**Body de `POST /api/users/change-password`:**
+```json
+{
+  "currentPassword": "password_actual",
+  "newPassword": "nueva_password_segura"
 }
 ```
 
@@ -81,15 +104,17 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
       "status": 1,
       "categoryId": "uuid",
       "stock": 48,
-      "prices": {
+      "category": { "id": "uuid", "name": "Bebidas" },
+      "price": {
+        "id": "uuid",
         "usdTarjeta": 1.5,
         "usdFisico": 1.5,
         "cop": 6300,
         "ves": 117.75,
         "exchangeType": "usd",
-        "isCustomVes": false
-      },
-      "category": { "id": "uuid", "name": "Bebidas" }
+        "isCustomVes": false,
+        "productId": "uuid"
+      }
     }
   ],
   "meta": { "total": 15, "page": 1, "limit": 10, "totalPages": 2 }

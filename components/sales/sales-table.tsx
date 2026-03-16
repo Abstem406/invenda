@@ -71,9 +71,10 @@ export function SalesTable() {
 
     // Dynamic VES calculation based on product's base currency
     const getDynamicVes = React.useCallback((p: Product) => {
-        if (p.prices.isCustomVes) return p.prices.ves;
-        if (p.prices.exchangeType === "usd") return p.prices.usdTarjeta * rates.bcv;
-        return p.prices.cop / rates.cop;
+        if (!p.price) return 0;
+        if (p.price.isCustomVes) return p.price.ves;
+        if (p.price.exchangeType === "usd") return p.price.usdTarjeta * rates.bcv;
+        return p.price.cop / rates.cop;
     }, [rates]);
 
     // Derived Grand Totals (What the customer ACTUALLY deposited)
@@ -92,7 +93,7 @@ export function SalesTable() {
     const cartTotals = React.useMemo(() => {
         let uT = 0, uF = 0, c = 0, v = 0;
         cart.forEach(item => {
-            const p = item.product.prices;
+            const p = item.product.price;
             let unitVes = getDynamicVes(item.product);
 
             uT += (p.usdTarjeta * item.quantity);
@@ -136,7 +137,7 @@ export function SalesTable() {
         setCart(prev => prev.map(item => {
             const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
             if (defaultCurrency && defaultCurrency !== "none") {
-                const p = item.product.prices;
+                const p = item.product.price;
                 if (defaultCurrency === "usdFisico") payments.usdFisico = p.usdFisico * item.quantity;
                 else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = p.usdTarjeta * item.quantity;
                 else if (defaultCurrency === "cop") payments.cop = p.cop * item.quantity;
@@ -193,9 +194,9 @@ export function SalesTable() {
         // Auto-fill payment based on the selected default currency
         const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
         if (defaultCurrency && defaultCurrency !== "none") {
-            if (defaultCurrency === "usdFisico") payments.usdFisico = prod.prices.usdFisico;
-            else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = prod.prices.usdTarjeta;
-            else if (defaultCurrency === "cop") payments.cop = prod.prices.cop;
+            if (defaultCurrency === "usdFisico") payments.usdFisico = prod.price.usdFisico;
+            else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = prod.price.usdTarjeta;
+            else if (defaultCurrency === "cop") payments.cop = prod.price.cop;
             else if (defaultCurrency === "ves") payments.ves = getDynamicVes(prod);
         }
 
@@ -227,7 +228,7 @@ export function SalesTable() {
                 // Recalculate payments based on the default currency
                 const updatedPayments = { ...item.payments };
                 if (defaultCurrency && defaultCurrency !== "none") {
-                    const p = item.product.prices;
+                    const p = item.product.price;
                     if (defaultCurrency === "usdFisico") updatedPayments.usdFisico = p.usdFisico * safeQty;
                     else if (defaultCurrency === "usdTarjeta") updatedPayments.usdTarjeta = p.usdTarjeta * safeQty;
                     else if (defaultCurrency === "cop") updatedPayments.cop = p.cop * safeQty;
@@ -252,15 +253,15 @@ export function SalesTable() {
                 productId: c.product.id,
                 quantity: c.quantity,
                 unitPrice: {
-                    ...c.product.prices,
+                    ...c.product.price,
                     ves: getDynamicVes(c.product)
                 },
                 totalPrice: {
-                    usdTarjeta: c.product.prices.usdTarjeta * c.quantity,
-                    usdFisico: c.product.prices.usdFisico * c.quantity,
-                    cop: c.product.prices.cop * c.quantity,
+                    usdTarjeta: c.product.price.usdTarjeta * c.quantity,
+                    usdFisico: c.product.price.usdFisico * c.quantity,
+                    cop: c.product.price.cop * c.quantity,
                     ves: getDynamicVes(c.product) * c.quantity,
-                    exchangeType: c.product.prices.exchangeType
+                    exchangeType: c.product.price.exchangeType
                 },
                 payments: c.payments
             })),
@@ -380,9 +381,9 @@ export function SalesTable() {
                                                     </TableCell>
                                                     <TableCell className="align-top py-4">
                                                         <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
-                                                            <div className="font-medium text-foreground">${(p.prices.usdTarjeta * item.quantity).toFixed(2)} USD (T)</div>
-                                                            <div className="text-muted-foreground">${(p.prices.usdFisico * item.quantity).toFixed(2)} USD (F)</div>
-                                                            <div className="text-muted-foreground">${(p.prices.cop * item.quantity).toLocaleString('es-CO')} COP</div>
+                                                            <div className="font-medium text-foreground">${(p.price.usdTarjeta * item.quantity).toFixed(2)} USD (T)</div>
+                                                            <div className="text-muted-foreground">${(p.price.usdFisico * item.quantity).toFixed(2)} USD (F)</div>
+                                                            <div className="text-muted-foreground">${(p.price.cop * item.quantity).toLocaleString('es-CO')} COP</div>
                                                             <div className="text-muted-foreground">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
                                                         </div>
                                                     </TableCell>

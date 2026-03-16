@@ -25,12 +25,14 @@ export interface ExchangeRates {
 }
 
 export interface Prices {
+    id: string;
     usdTarjeta: number;
     usdFisico: number;
     cop: number;
     ves: number;
     exchangeType: "usd" | "cop"; // Which one determines the base rule
     isCustomVes?: boolean;
+    productId: string;
 }
 
 export interface Product {
@@ -38,15 +40,19 @@ export interface Product {
     name: string;
     status: 1 | 2; // 1 = Active, 2 = Inactive
     categoryId: string;
+    category?: { id: string; name: string };
     stock: number;
-    prices: Prices;
+    price: Prices;
 }
+
+// Snapshot of price data embedded in sale records (no id/productId)
+export type PriceSnapshot = Omit<Prices, "id" | "productId">;
 
 export interface SaleItem {
     productId: string;
     quantity: number;
-    unitPrice: Prices;
-    totalPrice: Prices;
+    unitPrice: PriceSnapshot;
+    totalPrice: PriceSnapshot;
     // Exactly what the customer paid for THIS specific item
     payments: {
         usdFisico: number;
@@ -220,6 +226,23 @@ export const api = {
             body: JSON.stringify(user),
         });
     },
+    updateUser: async (id: string, updates: Partial<Omit<User, "id" | "createdAt" | "updatedAt">> & { password?: string }): Promise<User> => {
+        return fetchApi<User>(`/users/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(updates),
+        });
+    },
+    deleteUser: async (id: string): Promise<void> => {
+        return fetchApi<void>(`/users/${id}`, {
+            method: "DELETE",
+        });
+    },
+    changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+        return fetchApi<void>("/users/change-password", {
+            method: "POST",
+            body: JSON.stringify({ currentPassword, newPassword }),
+        });
+    },
 
     // Categories
     getCategories: async (params?: QueryParams): Promise<PaginatedResponse<Category>> => {
@@ -247,13 +270,13 @@ export const api = {
     getProducts: async (params?: QueryParams): Promise<PaginatedResponse<Product>> => {
         return fetchApi<PaginatedResponse<Product>>(`/products${buildQueryString(params)}`);
     },
-    createProduct: async (product: Omit<Product, "id">): Promise<Product> => {
+    createProduct: async (product: Omit<Product, "id" | "price"> & { price?: PriceSnapshot }): Promise<Product> => {
         return fetchApi<Product>("/products", {
             method: "POST",
             body: JSON.stringify(product),
         });
     },
-    updateProduct: async (id: string, updates: Partial<Product>): Promise<Product> => {
+    updateProduct: async (id: string, updates: Partial<Omit<Product, "price"> & { price?: PriceSnapshot }>): Promise<Product> => {
         return fetchApi<Product>(`/products/${id}`, {
             method: "PATCH",
             body: JSON.stringify(updates),
@@ -266,7 +289,7 @@ export const api = {
     },
 
     // Update prices only
-    updatePrices: async (id: string, prices: Prices): Promise<Product> => {
+    updatePrices: async (id: string, prices: Omit<Prices, "id" | "productId">): Promise<Product> => {
         return fetchApi<Product>(`/products/${id}/prices`, {
             method: "PATCH",
             body: JSON.stringify(prices),

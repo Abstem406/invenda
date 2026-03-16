@@ -40,6 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = async () => {
         try {
             await api.auth.logout();
+        } catch (error) {
+            console.warn("Backend rejected logout (e.g. session already expired). Clearing local state...");
         } finally {
             setUser(null);
         }

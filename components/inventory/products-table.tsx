@@ -148,7 +148,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
             categoryId,
             stock: parseInt(stock, 10),
             status: parseInt(status, 10) as 1 | 2,
-            prices: { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: "usd" }
+            price: { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: "usd" }
         })
         await loadData()
         setIsSubmitting(false)
