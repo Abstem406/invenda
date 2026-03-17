@@ -60,6 +60,7 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
     // Form states
     const [name, setName] = React.useState("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [error, setError] = React.useState("")
 
     // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
@@ -111,25 +112,44 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim()) return
+        setError("")
+        if (!name.trim()) {
+            setError("El nombre es requerido");
+            return;
+        }
         setIsSubmitting(true)
-        await api.createCategory({ name })
-        await loadCategories()
-        setIsSubmitting(false)
-        setIsCreateOpen(false)
-        setName("")
+        try {
+            await api.createCategory({ name })
+            await loadCategories()
+            setIsCreateOpen(false)
+            setName("")
+        } catch (err: any) {
+            setError(err.message || "Error al crear la categoría");
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!currentCategory || !name.trim()) return
+        setError("")
+        if (!currentCategory) return;
+        if (!name.trim()) {
+            setError("El nombre es requerido");
+            return;
+        }
         setIsSubmitting(true)
-        await api.updateCategory(currentCategory.id, name)
-        await loadCategories()
-        setIsSubmitting(false)
-        setIsEditOpen(false)
-        setCurrentCategory(null)
-        setName("")
+        try {
+            await api.updateCategory(currentCategory.id, name)
+            await loadCategories()
+            setIsEditOpen(false)
+            setCurrentCategory(null)
+            setName("")
+        } catch (err: any) {
+            setError(err.message || "Error al actualizar la categoría");
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleDelete = async (id: string) => {
@@ -140,6 +160,7 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
     const openEdit = (cat: Category) => {
         setCurrentCategory(cat)
         setName(cat.name)
+        setError("")
         setIsEditOpen(true)
     }
 
@@ -155,7 +176,13 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                         className="max-w-xs"
                     />
                 </div>
-                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <Dialog open={isCreateOpen} onOpenChange={(val) => {
+                    setIsCreateOpen(val)
+                    if (!val) {
+                        setName("")
+                        setError("")
+                    }
+                }}>
                     <DialogTrigger asChild>
                         <Button size="sm" className="w-full sm:w-auto">
                             <Plus className="w-4 h-4 mr-2" />
@@ -170,6 +197,7 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                             </DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleCreate} className="space-y-4">
+                            {error && <div className="text-destructive text-sm font-medium">{error}</div>}
                             <Input
                                 placeholder="Nombre de categoría"
                                 value={name}
@@ -320,7 +348,10 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
             {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={(open) => {
                 setIsEditOpen(open);
-                if (!open) setCurrentCategory(null);
+                if (!open) {
+                    setCurrentCategory(null);
+                    setError("");
+                }
             }}>
                 <DialogContent>
                     <DialogHeader>
@@ -330,6 +361,7 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleEdit} className="space-y-4">
+                        {error && <div className="text-destructive text-sm font-medium">{error}</div>}
                         <Input
                             placeholder="Nombre de categoría"
                             value={name}

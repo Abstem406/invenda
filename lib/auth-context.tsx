@@ -23,7 +23,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const currentUser = await api.auth.me();
             setUser(currentUser);
         } catch {
-            setUser(null);
+            // access_token likely expired — try refreshing it manually and retry
+            try {
+                await api.auth.refresh();
+                const currentUser = await api.auth.me();
+                setUser(currentUser);
+            } catch {
+                setUser(null);
+            }
         }
     }, []);
 

@@ -71,7 +71,13 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
 ```json
 {
   "data": [
-    { "id": "uuid", "name": "Bebidas" }
+    { 
+      "id": "uuid", 
+      "name": "Bebidas",
+      "deletedAt": null,
+      "createdAt": "2026-03-16T21:00:00.000Z",
+      "updatedAt": "2026-03-16T21:00:00.000Z"
+    }
   ],
   "meta": {
     "total": 5,
@@ -88,7 +94,7 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
 
 | Método | Ruta | Acceso | Descripción |
 |--------|------|--------|-------------|
-| `GET` | `/api/products` | Todos | Obtiene productos paginados. Soporta query params: `?page=1&limit=10&search=termino`. |
+| `GET` | `/api/products` | Todos | Obtiene productos paginados. Soporta query params: `?page=1&limit=10&search=termino&hasPrice=true/false`. |
 | `POST` | `/api/products` | Admin | Crea un nuevo producto. |
 | `PATCH` | `/api/products/:id` | Admin | Actualiza un producto existente. |
 | `DELETE` | `/api/products/:id` | Admin | Elimina un producto. |
@@ -104,6 +110,9 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
       "status": 1,
       "categoryId": "uuid",
       "stock": 48,
+      "deletedAt": null,
+      "createdAt": "2026-03-16T21:00:00.000Z",
+      "updatedAt": "2026-03-16T21:00:00.000Z",
       "category": { "id": "uuid", "name": "Bebidas" },
       "price": {
         "id": "uuid",
@@ -112,7 +121,13 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
         "cop": 6300,
         "ves": 117.75,
         "exchangeType": "usd",
+        "isCustomUsdTarjeta": false,
+        "isCustomUsdFisico": false,
+        "isCustomCop": false,
         "isCustomVes": false,
+        "deletedAt": null,
+        "createdAt": "2026-03-16T21:00:00.000Z",
+        "updatedAt": "2026-03-16T21:00:00.000Z",
         "productId": "uuid"
       }
     }
@@ -123,12 +138,36 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
 
 ---
 
+## Product Prices (`/api/product-prices`)
+
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| `GET` | `/api/product-prices` | Todos | Obtiene todos los precios con información del producto y categoría. |
+| `GET` | `/api/product-prices/:productId` | Todos | Obtiene los precios de un producto específico. |
+| `POST` | `/api/product-prices` | Admin | Crea los precios para un producto que aún no los tiene. |
+| `PATCH` | `/api/product-prices/:productId` | Admin | Actualiza los precios de un producto existente. |
+| `DELETE` | `/api/product-prices/:productId` | Admin | Elimina los precios asociados a un producto. |
+
+**Body de `POST /api/product-prices` y `PATCH /api/product-prices/:productId`:**
+```json
+{
+  "productId": "uuid", // Solo obligatorio en POST
+  "usdTarjeta": 1.5,
+  "usdFisico": 1.5,
+  "cop": 6300,
+  "ves": 117.75,
+  "exchangeType": "usd"
+}
+```
+
+---
+
 ## Exchange Rates (`/api/exchange-rates`)
 
 | Método | Ruta | Acceso | Descripción |
 |--------|------|--------|-------------|
 | `GET` | `/api/exchange-rates` | Todos | Obtiene los tipos de cambio actuales. |
-| `PUT` | `/api/exchange-rates` | Admin | Actualiza los tipos de cambio. |
+| `PUT` | `/api/exchange-rates` | Todos | Actualiza los tipos de cambio. |
 
 ---
 
@@ -148,6 +187,9 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
       "date": "2026-03-14T19:00:00.000Z",
       "status": "pagado",
       "receivedTotals": { "usdFisico": 10, "usdTarjeta": 0, "cop": 0, "ves": 0 },
+      "deletedAt": null,
+      "createdAt": "2026-03-16T21:00:00.000Z",
+      "updatedAt": "2026-03-16T21:00:00.000Z",
       "items": [
         {
           "id": "uuid",
@@ -155,7 +197,10 @@ A continuación, se detallan los endpoints expuestos por el backend. Todos los e
           "quantity": 2,
           "unitPrice": { "usdTarjeta": 5 },
           "totalPrice": { "usdTarjeta": 10 },
-          "payments": { "usdFisico": 10 }
+          "payments": { "usdFisico": 10 },
+          "deletedAt": null,
+          "createdAt": "2026-03-16T21:00:00.000Z",
+          "updatedAt": "2026-03-16T21:00:00.000Z"
         }
       ]
     }

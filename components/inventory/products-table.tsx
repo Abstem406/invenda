@@ -65,6 +65,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
     const [stock, setStock] = React.useState("")
     const [status, setStatus] = React.useState<"1" | "2">("1")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [error, setError] = React.useState("")
 
     // Pagination & Search states
     const [currentPage, setCurrentPage] = React.useState(1)
@@ -137,39 +138,76 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
         setStock("")
         setStatus("1")
         setCurrentProduct(null)
+        setError("")
     }
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim() || !categoryId || !stock) return
+        setError("")
+        if (!name.trim()) {
+            setError("El nombre del producto es requerido");
+            return;
+        }
+        if (!categoryId) {
+            setError("Debes seleccionar una categoría");
+            return;
+        }
+        if (stock === "" || parseInt(stock, 10) < 0) {
+            setError("El stock debe ser un número mayor o igual a 0");
+            return;
+        }
+
         setIsSubmitting(true)
-        await api.createProduct({
-            name,
-            categoryId,
-            stock: parseInt(stock, 10),
-            status: parseInt(status, 10) as 1 | 2,
-            price: { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: "usd" }
-        })
-        await loadData()
-        setIsSubmitting(false)
-        setIsCreateOpen(false)
-        resetForm()
+        try {
+            await api.createProduct({
+                name,
+                categoryId,
+                stock: parseInt(stock, 10),
+                status: parseInt(status, 10) as 1 | 2
+            })
+            await loadData()
+            setIsCreateOpen(false)
+            resetForm()
+        } catch (err: any) {
+            setError(err.message || "Error al crear el producto");
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!currentProduct || !name.trim() || !categoryId || !stock) return
+        setError("")
+        if (!currentProduct) return;
+        if (!name.trim()) {
+            setError("El nombre del producto es requerido");
+            return;
+        }
+        if (!categoryId) {
+            setError("Debes seleccionar una categoría");
+            return;
+        }
+        if (stock === "" || parseInt(stock, 10) < 0) {
+            setError("El stock debe ser un número mayor o igual a 0");
+            return;
+        }
+
         setIsSubmitting(true)
-        await api.updateProduct(currentProduct.id, {
-            name,
-            categoryId,
-            stock: parseInt(stock, 10),
-            status: parseInt(status, 10) as 1 | 2,
-        })
-        await loadData()
-        setIsSubmitting(false)
-        setIsEditOpen(false)
-        resetForm()
+        try {
+            await api.updateProduct(currentProduct.id, {
+                name,
+                categoryId,
+                stock: parseInt(stock, 10),
+                status: parseInt(status, 10) as 1 | 2,
+            })
+            await loadData()
+            setIsEditOpen(false)
+            resetForm()
+        } catch (err: any) {
+            setError(err.message || "Error al actualizar el producto");
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleDelete = async (id: string) => {
@@ -188,6 +226,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
         setCategoryId(prod.categoryId)
         setStock(prod.stock.toString())
         setStatus(prod.status.toString() as "1" | "2")
+        setError("")
         setIsEditOpen(true)
     }
 
@@ -225,6 +264,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                             </DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleCreate} className="space-y-4">
+                            {error && <div className="text-destructive text-sm font-medium">{error}</div>}
                             <div className="space-y-2">
                                 <Input
                                     placeholder="Nombre de producto"
@@ -443,6 +483,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleEdit} className="space-y-4">
+                        {error && <div className="text-destructive text-sm font-medium">{error}</div>}
                         <div className="space-y-2">
                             <Input
                                 placeholder="Nombre de producto"

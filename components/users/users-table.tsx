@@ -104,16 +104,22 @@ export function UsersTable() {
         setLoading(true)
         setError("")
         try {
-            const res = await api.getUsers({
-                page: currentPage,
-                limit: limit,
-                search: debouncedSearch || undefined
-            })
-            setUsers(res.data || [])
-            setTotalPages(res.meta?.totalPages || 1)
+            const res = await api.getUsers()
+            // Filter by search term locally
+            let currentUsers = res || [];
+            if (debouncedSearch) {
+                const term = debouncedSearch.toLowerCase();
+                currentUsers = currentUsers.filter(u =>
+                    u.name?.toLowerCase().includes(term) ||
+                    u.email.toLowerCase().includes(term) ||
+                    u.role.toLowerCase().includes(term)
+                );
+            }
+            setUsers(currentUsers)
+            setTotalPages(Math.max(1, Math.ceil(currentUsers.length / limit)))
             // Safety check if we deleted the last item on a page
-            if (currentPage > 1 && res.data.length === 0 && res.meta.total > 0) {
-                setCurrentPage(res.meta.totalPages)
+            if (currentPage > 1 && currentUsers.length === 0 && res.length > 0) {
+                setCurrentPage(Math.max(1, Math.ceil(currentUsers.length / limit)))
             }
         } catch (err: any) {
             console.error(err)
@@ -125,9 +131,21 @@ export function UsersTable() {
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim() || !email.trim() || !password.trim()) return
-        setIsSubmitting(true)
         setError("")
+        if (!name.trim()) {
+            setError("El nombre es requerido");
+            return;
+        }
+        if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email)) {
+            setError("Ingresa un correo electrónico válido");
+            return;
+        }
+        if (password.length < 6) {
+            setError("La contraseña debe tener al menos 6 caracteres");
+            return;
+        }
+
+        setIsSubmitting(true)
         try {
             await api.createUser({
                 name,
@@ -147,9 +165,23 @@ export function UsersTable() {
 
     const handleEditUser = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!currentUser || !editName.trim() || !editEmail.trim()) return
-        setIsSubmitting(true)
         setError("")
+        if (!currentUser) return;
+
+        if (!editName.trim()) {
+            setError("El nombre es requerido");
+            return;
+        }
+        if (!editEmail.trim() || !/^\S+@\S+\.\S+$/.test(editEmail)) {
+            setError("Ingresa un correo electrónico válido");
+            return;
+        }
+        if (editPassword.trim() && editPassword.length < 6) {
+            setError("Si vas a cambiarla, la contraseña debe tener al menos 6 caracteres");
+            return;
+        }
+
+        setIsSubmitting(true)
         try {
             const updates: any = {
                 name: editName,
@@ -269,6 +301,7 @@ export function UsersTable() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     disabled={isSubmitting}
                                     required
+                                    minLength={6}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -486,6 +519,7 @@ export function UsersTable() {
                                 value={editPassword}
                                 onChange={(e) => setEditPassword(e.target.value)}
                                 disabled={isSubmitting}
+                                minLength={6}
                             />
                         </div>
                         <div className="space-y-2">

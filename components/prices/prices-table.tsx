@@ -67,6 +67,9 @@ export function PricesTable() {
     const [exchangeType, setExchangeType] = React.useState<"usd" | "cop">("usd")
     const [isCustomVes, setIsCustomVes] = React.useState(false)
     const [customVes, setCustomVes] = React.useState("")
+    const [isCustomUsdTarjeta, setIsCustomUsdTarjeta] = React.useState(false)
+    const [isCustomUsdFisico, setIsCustomUsdFisico] = React.useState(false)
+    const [isCustomCop, setIsCustomCop] = React.useState(false)
 
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -128,6 +131,9 @@ export function PricesTable() {
         setExchangeType("usd")
         setIsCustomVes(false)
         setCustomVes("")
+        setIsCustomUsdTarjeta(false)
+        setIsCustomUsdFisico(false)
+        setIsCustomCop(false)
         setCurrentProduct(null)
     }
 
@@ -156,19 +162,6 @@ export function PricesTable() {
         }
         await api.updateExchangeRates(newRates)
 
-        // Recalculate all products' usdFisico based on new copUsd rate
-        // COP is the source of truth, usdFisico = cop / copUsd
-        const allProductsRes = await api.getProducts({ limit: 1000 });
-        for (const prod of allProductsRes.data) {
-            if (prod.price && prod.price.cop > 0) {
-                const newUsdFisico = parseFloat((prod.price.cop / newRates.copUsd).toFixed(2));
-                await api.updatePrices(prod.id, {
-                    ...prod.price,
-                    usdFisico: newUsdFisico
-                });
-            }
-        }
-
         await loadData()
         setIsSubmitting(false)
         setIsRatesOpen(false)
@@ -191,13 +184,17 @@ export function PricesTable() {
         const vCop = parseFloat(cop) || 0
         const vVes = isCustomVes ? (parseFloat(customVes) || 0) : calculateVes(exchangeType, vUsdTarjeta, vCop)
 
-        await api.updatePrices(selectedProductId, {
+        await api.createProductPrice({
+            productId: selectedProductId,
             usdTarjeta: vUsdTarjeta,
             usdFisico: vUsdFisico,
             cop: vCop,
             ves: vVes,
             exchangeType,
-            isCustomVes
+            isCustomVes,
+            isCustomUsdTarjeta,
+            isCustomUsdFisico,
+            isCustomCop
         })
 
         await loadData()
@@ -216,13 +213,16 @@ export function PricesTable() {
         const vCop = parseFloat(cop) || 0
         const vVes = isCustomVes ? (parseFloat(customVes) || 0) : calculateVes(exchangeType, vUsdTarjeta, vCop)
 
-        await api.updatePrices(currentProduct.id, {
+        await api.updateProductPrice(currentProduct.id, {
             usdTarjeta: vUsdTarjeta,
             usdFisico: vUsdFisico,
             cop: vCop,
             ves: vVes,
             exchangeType,
-            isCustomVes
+            isCustomVes,
+            isCustomUsdTarjeta,
+            isCustomUsdFisico,
+            isCustomCop
         })
 
         await loadData()
@@ -239,6 +239,9 @@ export function PricesTable() {
         setExchangeType(prod.price?.exchangeType || "usd")
         setIsCustomVes(prod.price?.isCustomVes || false)
         setCustomVes(prod.price?.ves?.toString() || "0")
+        setIsCustomUsdTarjeta(prod.price?.isCustomUsdTarjeta || false)
+        setIsCustomUsdFisico(prod.price?.isCustomUsdFisico || false)
+        setIsCustomCop(prod.price?.isCustomCop || false)
         setIsEditOpen(true)
     }
 
@@ -309,7 +312,13 @@ export function PricesTable() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">USD Tarjeta ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">USD Tarjeta ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-usd-tarjeta-1" checked={isCustomUsdTarjeta} onCheckedChange={setIsCustomUsdTarjeta} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-usd-tarjeta-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -321,7 +330,13 @@ export function PricesTable() {
                                     <div className="text-xs text-muted-foreground">Úsalo para calcular VES.</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">USD Físico ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">USD Físico ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-usd-fisico-1" checked={isCustomUsdFisico} onCheckedChange={setIsCustomUsdFisico} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-usd-fisico-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -330,16 +345,24 @@ export function PricesTable() {
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setUsdFisico(val);
-                                            // Auto calc COP based on USD Fisico
-                                            const num = parseFloat(val) || 0;
-                                            setCop((num * rates.copUsd).toString());
+                                            // Auto calc COP based on USD Fisico only if COP is not custom
+                                            if (!isCustomCop) {
+                                                const num = parseFloat(val) || 0;
+                                                setCop((num * rates.copUsd).toString());
+                                            }
                                         }}
                                         disabled={isSubmitting}
                                     />
                                     <div className="text-xs text-muted-foreground">Multiplica x {rates.copUsd} para dar COP.</div>
                                 </div>
                                 <div className="space-y-2 col-span-2">
-                                    <label className="text-sm font-medium">Precio COP ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">Precio COP ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-cop-1" checked={isCustomCop} onCheckedChange={setIsCustomCop} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-cop-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -348,9 +371,11 @@ export function PricesTable() {
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setCop(val);
-                                            // Auto calc USD Fisico based on COP (dividing in reverse)
-                                            const num = parseFloat(val) || 0;
-                                            setUsdFisico((num / rates.copUsd).toFixed(2).toString());
+                                            // Auto calc USD Fisico based on COP only if USD Fisico is not custom
+                                            if (!isCustomUsdFisico) {
+                                                const num = parseFloat(val) || 0;
+                                                setUsdFisico((num / rates.copUsd).toFixed(2).toString());
+                                            }
                                         }}
                                         disabled={isSubmitting}
                                     />
@@ -608,7 +633,13 @@ export function PricesTable() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">USD Tarjeta ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">USD Tarjeta ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-usd-tarjeta-2" checked={isCustomUsdTarjeta} onCheckedChange={setIsCustomUsdTarjeta} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-usd-tarjeta-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -620,7 +651,13 @@ export function PricesTable() {
                                     <div className="text-xs text-muted-foreground">Para calcular VES.</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">USD Físico ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">USD Físico ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-usd-fisico-2" checked={isCustomUsdFisico} onCheckedChange={setIsCustomUsdFisico} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-usd-fisico-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -628,9 +665,11 @@ export function PricesTable() {
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setUsdFisico(val);
-                                            // Auto calc COP based on USD Fisico
-                                            const num = parseFloat(val) || 0;
-                                            setCop((num * rates.copUsd).toString());
+                                            // Auto calc COP based on USD Fisico only if COP is not custom
+                                            if (!isCustomCop) {
+                                                const num = parseFloat(val) || 0;
+                                                setCop((num * rates.copUsd).toString());
+                                            }
                                         }}
                                         disabled={isSubmitting}
                                         min="0"
@@ -638,7 +677,13 @@ export function PricesTable() {
                                     <div className="text-xs text-muted-foreground">X {rates.copUsd} = COP.</div>
                                 </div>
                                 <div className="space-y-2 col-span-2">
-                                    <label className="text-sm font-medium">COP ($)</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium">COP ($)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch id="custom-cop-2" checked={isCustomCop} onCheckedChange={setIsCustomCop} disabled={isSubmitting} size="sm" />
+                                            <label htmlFor="custom-cop-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
+                                        </div>
+                                    </div>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -646,9 +691,11 @@ export function PricesTable() {
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setCop(val);
-                                            // Auto calc USD Fisico based on COP
-                                            const num = parseFloat(val) || 0;
-                                            setUsdFisico((num / rates.copUsd).toFixed(2).toString());
+                                            // Auto calc USD Fisico based on COP only if USD Fisico is not custom
+                                            if (!isCustomUsdFisico) {
+                                                const num = parseFloat(val) || 0;
+                                                setUsdFisico((num / rates.copUsd).toFixed(2).toString());
+                                            }
                                         }}
                                         disabled={isSubmitting}
                                         min="0"

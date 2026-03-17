@@ -16,6 +16,9 @@ export interface LoginCredentials {
 export interface Category {
     id: string;
     name: string;
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
 }
 
 export interface ExchangeRates {
@@ -31,8 +34,14 @@ export interface Prices {
     cop: number;
     ves: number;
     exchangeType: "usd" | "cop"; // Which one determines the base rule
+    isCustomUsdTarjeta?: boolean;
+    isCustomUsdFisico?: boolean;
+    isCustomCop?: boolean;
     isCustomVes?: boolean;
     productId: string;
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
 }
 
 export interface Product {
@@ -43,6 +52,9 @@ export interface Product {
     category?: { id: string; name: string };
     stock: number;
     price: Prices;
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
 }
 
 // Snapshot of price data embedded in sale records (no id/productId)
@@ -60,6 +72,9 @@ export interface SaleItem {
         cop: number;
         ves: number;
     };
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
 }
 
 export interface Sale {
@@ -74,6 +89,9 @@ export interface Sale {
         ves: number;
     };
     status: "pagado" | "fiado" | "debiendo";
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
@@ -140,15 +158,47 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
             return retryRes.json();
         }
 
-        // Refresh failed — redirect to login
+        // Refresh failed — clear cookies via logout endpoint and redirect
         if (typeof window !== "undefined") {
-            window.location.href = "/login";
+            try {
+                await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", credentials: "include" });
+            } catch (e) {
+                // Ignore logout errors during expiration
+            }
+            if (window.location.pathname !== "/login") {
+                window.location.href = "/login";
+            }
         }
         throw new Error("Session expired");
     }
 
     if (!res.ok) {
-        throw new Error(`API Error: ${res.status} ${res.statusText}`);
+        let errorMessage = `Error de API: ${res.status} ${res.statusText}`;
+        try {
+            const errorData = await res.json();
+            if (errorData.message) {
+                // NestJS might return an array of error messages for validation
+                const messages = Array.isArray(errorData.message)
+                    ? errorData.message
+                    : [errorData.message];
+
+                // Map common English class-validator messages to Spanish
+                const translatedMessages = messages.map((msg: string) => {
+                    if (msg.includes("password must be longer than or equal to 6 characters")) return "La contraseña debe tener al menos 6 caracteres";
+                    if (msg.includes("email must be an email")) return "El correo electrónico no es válido";
+                    if (msg.includes("should not be empty")) return "Este campo no puede estar vacío";
+                    if (msg.includes("must be a string")) return "Debe ser un texto válido";
+                    if (msg.includes("must be a number")) return "Debe ser un número válido";
+                    if (msg.includes("must be a positive number")) return "Debe ser un número positivo";
+                    return msg; // Fallback to original if unknown
+                });
+
+                errorMessage = translatedMessages.join(', ');
+            }
+        } catch {
+            // If body is not JSON or empty, keep the default error message
+        }
+        throw new Error(errorMessage);
     }
 
     // Handle 204 No Content for DELETE
@@ -176,6 +226,7 @@ export interface QueryParams {
     page?: number;
     limit?: number;
     search?: string;
+    hasPrice?: boolean | string;
 }
 
 const buildQueryString = (params?: QueryParams) => {
@@ -184,6 +235,7 @@ const buildQueryString = (params?: QueryParams) => {
     if (params.page !== undefined) query.append("page", params.page.toString());
     if (params.limit !== undefined) query.append("limit", params.limit.toString());
     if (params.search !== undefined) query.append("search", params.search);
+    if (params.hasPrice !== undefined) query.append("hasPrice", params.hasPrice.toString());
     const queryString = query.toString();
     return queryString ? `?${queryString}` : "";
 };
@@ -209,16 +261,14 @@ export const api = {
             });
         },
         me: async (): Promise<User> => {
-            // El endpoint me podría devolver { user: ... } o solo el User.
-            // Asumiendo que es consistente con login y por la prueba del usuario, devolvemos el objeto User.
-            // Ajustar si el endpoint también envuelve la respuesta.
-            return fetchApi<User>("/auth/me");
+            const data = await fetchApi<any>("/auth/me");
+            return data.user ? data.user : data;
         },
     },
 
     // Users
-    getUsers: async (params?: QueryParams): Promise<PaginatedResponse<User>> => {
-        return fetchApi<PaginatedResponse<User>>(`/users${buildQueryString(params)}`);
+    getUsers: async (): Promise<User[]> => {
+        return fetchApi<User[]>("/users");
     },
     createUser: async (user: Omit<User, "id" | "createdAt" | "updatedAt"> & { password?: string }): Promise<User> => {
         return fetchApi<User>("/users", {
@@ -270,13 +320,13 @@ export const api = {
     getProducts: async (params?: QueryParams): Promise<PaginatedResponse<Product>> => {
         return fetchApi<PaginatedResponse<Product>>(`/products${buildQueryString(params)}`);
     },
-    createProduct: async (product: Omit<Product, "id" | "price"> & { price?: PriceSnapshot }): Promise<Product> => {
+    createProduct: async (product: Omit<Product, "id" | "price">): Promise<Product> => {
         return fetchApi<Product>("/products", {
             method: "POST",
             body: JSON.stringify(product),
         });
     },
-    updateProduct: async (id: string, updates: Partial<Omit<Product, "price"> & { price?: PriceSnapshot }>): Promise<Product> => {
+    updateProduct: async (id: string, updates: Partial<Omit<Product, "price">>): Promise<Product> => {
         return fetchApi<Product>(`/products/${id}`, {
             method: "PATCH",
             body: JSON.stringify(updates),
@@ -288,11 +338,25 @@ export const api = {
         });
     },
 
-    // Update prices only
-    updatePrices: async (id: string, prices: Omit<Prices, "id" | "productId">): Promise<Product> => {
-        return fetchApi<Product>(`/products/${id}/prices`, {
+    // Product Prices
+    getProductPrices: async (params?: QueryParams): Promise<PaginatedResponse<any>> => {
+        return fetchApi<PaginatedResponse<any>>(`/product-prices${buildQueryString(params)}`);
+    },
+    createProductPrice: async (price: Omit<Prices, "id">): Promise<Prices> => {
+        return fetchApi<Prices>("/product-prices", {
+            method: "POST",
+            body: JSON.stringify(price),
+        });
+    },
+    updateProductPrice: async (productId: string, prices: Partial<Omit<Prices, "id" | "productId">>): Promise<Prices> => {
+        return fetchApi<Prices>(`/product-prices/${productId}`, {
             method: "PATCH",
             body: JSON.stringify(prices),
+        });
+    },
+    deleteProductPrice: async (productId: string): Promise<void> => {
+        return fetchApi<void>(`/product-prices/${productId}`, {
+            method: "DELETE",
         });
     },
 

@@ -36,8 +36,22 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, Eye, ShoppingCart } from "lucide-react"
+import { Plus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 // Local interface for Cart Items before posting to API
 interface CartItem {
@@ -60,21 +74,29 @@ export function SalesTable() {
     // Cart states
     const [isCreateOpen, setIsCreateOpen] = React.useState(false)
     const [cart, setCart] = React.useState<CartItem[]>([])
-    const [selectedProductId, setSelectedProductId] = React.useState("")
+
+    // Product Command/Popover states
+    const [openCombobox, setOpenCombobox] = React.useState(false)
+    const [searchCombobox, setSearchCombobox] = React.useState("")
+    const [prodPage, setProdPage] = React.useState(1)
+    const [hasMoreProds, setHasMoreProds] = React.useState(true)
+    const [isLoadMoreProds, setIsLoadMoreProds] = React.useState(false)
+    const observerTarget = React.useRef<HTMLDivElement>(null)
+
     const [saleStatus, setSaleStatus] = React.useState<"pagado" | "fiado" | "debiendo">("pagado")
     const [defaultCurrency, setDefaultCurrency] = React.useState<"none" | "usdFisico" | "usdTarjeta" | "cop" | "ves">("none")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [checkoutError, setCheckoutError] = React.useState<string | null>(null)
 
     // View Details states
     const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
     const [selectedSale, setSelectedSale] = React.useState<Sale | null>(null)
 
-    // Dynamic VES calculation based on product's base currency
     const getDynamicVes = React.useCallback((p: Product) => {
         if (!p.price) return 0;
         if (p.price.isCustomVes) return p.price.ves;
-        if (p.price.exchangeType === "usd") return p.price.usdTarjeta * rates.bcv;
-        return p.price.cop / rates.cop;
+        if (p.price.exchangeType === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
+        return (p.price.cop || 0) / rates.cop;
     }, [rates]);
 
     // Derived Grand Totals (What the customer ACTUALLY deposited)
@@ -93,12 +115,12 @@ export function SalesTable() {
     const cartTotals = React.useMemo(() => {
         let uT = 0, uF = 0, c = 0, v = 0;
         cart.forEach(item => {
-            const p = item.product.price;
+            const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
             let unitVes = getDynamicVes(item.product);
 
-            uT += (p.usdTarjeta * item.quantity);
-            uF += (p.usdFisico * item.quantity);
-            c += (p.cop * item.quantity);
+            uT += ((p.usdTarjeta || 0) * item.quantity);
+            uF += ((p.usdFisico || 0) * item.quantity);
+            c += ((p.cop || 0) * item.quantity);
             v += (unitVes * item.quantity);
         });
         return { usdTarjeta: uT, usdFisico: uF, cop: c, ves: v }
@@ -137,10 +159,10 @@ export function SalesTable() {
         setCart(prev => prev.map(item => {
             const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
             if (defaultCurrency && defaultCurrency !== "none") {
-                const p = item.product.price;
-                if (defaultCurrency === "usdFisico") payments.usdFisico = p.usdFisico * item.quantity;
-                else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = p.usdTarjeta * item.quantity;
-                else if (defaultCurrency === "cop") payments.cop = p.cop * item.quantity;
+                const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
+                if (defaultCurrency === "usdFisico") payments.usdFisico = (p.usdFisico || 0) * item.quantity;
+                else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = (p.usdTarjeta || 0) * item.quantity;
+                else if (defaultCurrency === "cop") payments.cop = (p.cop || 0) * item.quantity;
                 else if (defaultCurrency === "ves") payments.ves = getDynamicVes(item.product) * item.quantity;
             }
             return { ...item, payments };
@@ -151,18 +173,16 @@ export function SalesTable() {
     const loadData = async () => {
         setLoading(true)
         try {
-            const [salesRes, prodsRes, exchange] = await Promise.all([
+            const [salesRes, exchange] = await Promise.all([
                 api.getSales({
                     page: currentPage,
                     limit: limit,
                     search: debouncedSearch || undefined
                 }),
-                api.getProducts({ limit: 100 }), // large limit for cart selection
                 api.getExchangeRates()
             ])
             setSales(salesRes.data)
             setTotalPages(salesRes.meta.totalPages)
-            setProducts(prodsRes.data)
             setRates(exchange)
 
             if (currentPage > 1 && salesRes.data.length === 0 && salesRes.meta.total > 0) {
@@ -175,12 +195,82 @@ export function SalesTable() {
         }
     }
 
+    // Load Initial/Search Products for Combobox
+    React.useEffect(() => {
+        const loadInitialProducts = async () => {
+            setIsLoadMoreProds(true);
+            try {
+                const res = await api.getProducts({ page: 1, limit: 15, search: searchCombobox, hasPrice: true });
+                setProducts(res.data);
+                setProdPage(1);
+                setHasMoreProds(res.data.length > 0 && res.meta.totalPages > 1);
+            } catch (err) {
+                console.error("Error loading products for combobox", err);
+            } finally {
+                setIsLoadMoreProds(false);
+            }
+        };
+        const timer = setTimeout(() => {
+            loadInitialProducts();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchCombobox]);
+
+    // Load More Products API
+    const loadMoreProducts = React.useCallback(async () => {
+        if (!hasMoreProds || isLoadMoreProds) return;
+        setIsLoadMoreProds(true);
+        try {
+            const nextPage = prodPage + 1;
+            const res = await api.getProducts({ page: nextPage, limit: 15, search: searchCombobox, hasPrice: true });
+
+            if (res.data.length > 0) {
+                setProducts(prev => {
+                    // Avoid duplicates if API returns overlapping results
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const newProds = res.data.filter(p => !existingIds.has(p.id));
+                    return [...prev, ...newProds];
+                });
+                setProdPage(nextPage);
+            } else {
+                setHasMoreProds(false);
+            }
+
+            if (nextPage >= res.meta.totalPages) {
+                setHasMoreProds(false);
+            }
+        } catch (err) {
+            console.error("Error loading more products", err);
+        } finally {
+            setIsLoadMoreProds(false);
+        }
+    }, [prodPage, hasMoreProds, isLoadMoreProds, searchCombobox]);
+
+    // Intersection Observer for Infinite Scroll
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0].isIntersecting) {
+                    loadMoreProducts();
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (observerTarget.current && openCombobox) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => observer.disconnect();
+    }, [loadMoreProducts, openCombobox]);
+
     const resetForm = () => {
         setIsCreateOpen(false)
         setCart([])
-        setSelectedProductId("")
+        setSearchCombobox("")
         setSaleStatus("pagado")
         setDefaultCurrency("none")
+        setCheckoutError(null)
     }
 
     const handleAddToCart = (productId: string) => {
@@ -194,9 +284,10 @@ export function SalesTable() {
         // Auto-fill payment based on the selected default currency
         const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
         if (defaultCurrency && defaultCurrency !== "none") {
-            if (defaultCurrency === "usdFisico") payments.usdFisico = prod.price.usdFisico;
-            else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = prod.price.usdTarjeta;
-            else if (defaultCurrency === "cop") payments.cop = prod.price.cop;
+            const defaultPrice = prod.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
+            if (defaultCurrency === "usdFisico") payments.usdFisico = defaultPrice.usdFisico || 0;
+            else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = defaultPrice.usdTarjeta || 0;
+            else if (defaultCurrency === "cop") payments.cop = defaultPrice.cop || 0;
             else if (defaultCurrency === "ves") payments.ves = getDynamicVes(prod);
         }
 
@@ -204,8 +295,9 @@ export function SalesTable() {
             product: prod,
             quantity: 1,
             payments
-        }])
-        setSelectedProductId("")
+        }]);
+        setOpenCombobox(false);
+        setSearchCombobox("");
     }
 
     const updateItemPayment = (productId: string, field: keyof CartItem["payments"], value: string) => {
@@ -228,10 +320,10 @@ export function SalesTable() {
                 // Recalculate payments based on the default currency
                 const updatedPayments = { ...item.payments };
                 if (defaultCurrency && defaultCurrency !== "none") {
-                    const p = item.product.price;
-                    if (defaultCurrency === "usdFisico") updatedPayments.usdFisico = p.usdFisico * safeQty;
-                    else if (defaultCurrency === "usdTarjeta") updatedPayments.usdTarjeta = p.usdTarjeta * safeQty;
-                    else if (defaultCurrency === "cop") updatedPayments.cop = p.cop * safeQty;
+                    const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
+                    if (defaultCurrency === "usdFisico") updatedPayments.usdFisico = (p.usdFisico || 0) * safeQty;
+                    else if (defaultCurrency === "usdTarjeta") updatedPayments.usdTarjeta = (p.usdTarjeta || 0) * safeQty;
+                    else if (defaultCurrency === "cop") updatedPayments.cop = (p.cop || 0) * safeQty;
                     else if (defaultCurrency === "ves") updatedPayments.ves = getDynamicVes(item.product) * safeQty;
                 }
                 return { ...item, quantity: safeQty, payments: updatedPayments };
@@ -247,37 +339,58 @@ export function SalesTable() {
     const handleCheckout = async () => {
         if (cart.length === 0) return;
         setIsSubmitting(true);
+        setCheckoutError(null);
 
-        await api.createSale({
-            items: cart.map(c => ({
-                productId: c.product.id,
-                quantity: c.quantity,
-                unitPrice: {
-                    ...c.product.price,
-                    ves: getDynamicVes(c.product)
-                },
-                totalPrice: {
-                    usdTarjeta: c.product.price.usdTarjeta * c.quantity,
-                    usdFisico: c.product.price.usdFisico * c.quantity,
-                    cop: c.product.price.cop * c.quantity,
-                    ves: getDynamicVes(c.product) * c.quantity,
-                    exchangeType: c.product.price.exchangeType
-                },
-                payments: c.payments
-            })),
-            receivedTotals: receivedTotals,
-            status: saleStatus
-        });
+        try {
+            await api.createSale({
+                items: cart.map(c => {
+                    const safePrice = c.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: 'usd' as const };
+                    return {
+                        productId: c.product.id,
+                        quantity: c.quantity,
+                        unitPrice: {
+                            ...safePrice,
+                            ves: getDynamicVes(c.product)
+                        },
+                        totalPrice: {
+                            usdTarjeta: (safePrice.usdTarjeta || 0) * c.quantity,
+                            usdFisico: (safePrice.usdFisico || 0) * c.quantity,
+                            cop: (safePrice.cop || 0) * c.quantity,
+                            ves: getDynamicVes(c.product) * c.quantity,
+                            exchangeType: safePrice.exchangeType
+                        },
+                        payments: c.payments
+                    }
+                }),
+                receivedTotals: receivedTotals,
+                status: saleStatus
+            });
 
-        await loadData();
-        resetForm();
-        setIsSubmitting(false);
+            await loadData();
+            resetForm();
+        } catch (error: any) {
+            console.error("Error creating sale", error);
+            setCheckoutError(error.message || "Ocurrió un error al procesar la venta. Por favor, revisa los datos ingresados.");
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     const openDetails = (sale: Sale) => {
         setSelectedSale(sale);
         setIsDetailsOpen(true);
     }
+
+    // Validation for checkout
+    const hasItemsWithoutPrice = React.useMemo(() => {
+        return cart.some(item => {
+            const p = item.product.price;
+            if (!p) return true;
+            return (p.usdTarjeta || 0) === 0 && (p.usdFisico || 0) === 0 && (p.cop || 0) === 0 && (p.ves || 0) === 0;
+        });
+    }, [cart]);
+
+    const canCheckout = cart.length > 0 && !isSubmitting && (saleStatus === "fiado" || !hasItemsWithoutPrice);
 
     return (
         <div className="space-y-8">
@@ -312,19 +425,66 @@ export function SalesTable() {
                         <div className="flex gap-4 items-end mt-2">
                             <div className="flex-1 space-y-2">
                                 <label className="text-sm font-medium">Agregar Producto al Carrito</label>
-                                <Select value={selectedProductId} onValueChange={(val) => handleAddToCart(val)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona un producto en stock" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {products.filter(p => p.stock > 0 && !cart.find(c => c.product.id === p.id)).map(p => (
-                                            <SelectItem key={p.id} value={p.id}>
-                                                <span className="font-mono text-muted-foreground mr-2">[{p.stock}]</span>
-                                                {p.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox}
+                                            className="w-full justify-between"
+                                        >
+                                            Selecciona un producto en stock...
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        className="w-[300px] sm:w-[500px] p-0 pointer-events-auto"
+                                        align="start"
+                                    >
+                                        <Command shouldFilter={false}>
+                                            <CommandInput
+                                                placeholder="Buscar producto..."
+                                                value={searchCombobox}
+                                                onValueChange={setSearchCombobox}
+                                            />
+                                            <CommandList
+                                                className="max-h-[300px] overflow-y-auto"
+                                                onWheel={(e) => {
+                                                    // Prevent Radix dialog from hijacking the wheel scroll
+                                                    e.stopPropagation();
+                                                }}
+                                            >
+                                                <CommandEmpty>
+                                                    {isLoadMoreProds ? "Buscando..." : "No se encontró ningún producto libre."}
+                                                </CommandEmpty>
+                                                <CommandGroup>
+                                                    {products
+                                                        .filter(p => p.stock > 0 && !cart.find(c => c.product.id === p.id))
+                                                        .map((p) => (
+                                                            <CommandItem
+                                                                key={p.id}
+                                                                value={p.id}
+                                                                onSelect={(currentValue) => {
+                                                                    handleAddToCart(currentValue)
+                                                                }}
+                                                            >
+                                                                <div className="flex items-center justify-between w-full">
+                                                                    <span>{p.name} <span className="text-muted-foreground text-xs ml-2">(${p.price?.usdFisico || 0} USD)</span></span>
+                                                                    <span className="font-mono text-muted-foreground mr-2 text-xs">Stock: {p.stock}</span>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                </CommandGroup>
+                                                {/* Intersection trigger */}
+                                                {(hasMoreProds || isLoadMoreProds) && (
+                                                    <div ref={observerTarget} className="flex justify-center p-4">
+                                                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                                    </div>
+                                                )}
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Divisa de Pago</label>
@@ -381,9 +541,9 @@ export function SalesTable() {
                                                     </TableCell>
                                                     <TableCell className="align-top py-4">
                                                         <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
-                                                            <div className="font-medium text-foreground">${(p.price.usdTarjeta * item.quantity).toFixed(2)} USD (T)</div>
-                                                            <div className="text-muted-foreground">${(p.price.usdFisico * item.quantity).toFixed(2)} USD (F)</div>
-                                                            <div className="text-muted-foreground">${(p.price.cop * item.quantity).toLocaleString('es-CO')} COP</div>
+                                                            <div className="font-medium text-foreground">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)</div>
+                                                            <div className="text-muted-foreground">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)</div>
+                                                            <div className="text-muted-foreground">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP</div>
                                                             <div className="text-muted-foreground">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
                                                         </div>
                                                     </TableCell>
@@ -449,9 +609,21 @@ export function SalesTable() {
                             </div>
                         )}
 
+                        {hasItemsWithoutPrice && saleStatus !== "fiado" && cart.length > 0 && (
+                            <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                Hay productos en el carrito sin precio asignado (con valor 0). Para poder procesar esta venta, el estado de la venta debe ser "Fiado".
+                            </div>
+                        )}
+
+                        {checkoutError && (
+                            <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                {checkoutError}
+                            </div>
+                        )}
+
                         <DialogFooter className="mt-4">
                             <Button variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancelar</Button>
-                            <Button onClick={handleCheckout} disabled={cart.length === 0 || isSubmitting}>
+                            <Button onClick={handleCheckout} disabled={!canCheckout}>
                                 {isSubmitting ? "Procesando..." : "Confirmar Venta"}
                             </Button>
                         </DialogFooter>
@@ -658,6 +830,6 @@ export function SalesTable() {
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }
