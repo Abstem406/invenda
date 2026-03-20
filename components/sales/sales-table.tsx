@@ -86,6 +86,7 @@ export function SalesTable() {
 
     const [saleStatus, setSaleStatus] = React.useState<"pagado" | "fiado" | "debiendo">("pagado")
     const [defaultCurrency, setDefaultCurrency] = React.useState<"none" | "usdFisico" | "usdTarjeta" | "cop" | "ves">("none")
+    const [vesBaseCurrency, setVesBaseCurrency] = React.useState<"usd" | "cop">("usd")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [checkoutError, setCheckoutError] = React.useState<string | null>(null)
 
@@ -95,11 +96,10 @@ export function SalesTable() {
 
     const getDynamicVes = React.useCallback((p: Product) => {
         if (!p.price) return 0;
-        if (p.price.isCustomVes) return p.price.ves;
-        if (p.price.exchangeType === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
-        // COP base: direct COP to Bs conversion using Factor COP
+        if (vesBaseCurrency === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
+        // COP base: COP / Factor COP = Bs
         return (p.price.cop || 0) / rates.cop;
-    }, [rates]);
+    }, [rates, vesBaseCurrency]);
 
     // Derived Grand Totals (What the customer ACTUALLY deposited)
     const receivedTotals = React.useMemo(() => {
@@ -155,7 +155,7 @@ export function SalesTable() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, debouncedSearch, limit])
 
-    // When defaultCurrency changes, recalculate ALL cart items payments immediately
+    // When defaultCurrency or vesBaseCurrency changes, recalculate ALL cart items payments immediately
     React.useEffect(() => {
         if (cart.length === 0) return;
         setCart(prev => prev.map(item => {
@@ -170,7 +170,7 @@ export function SalesTable() {
             return { ...item, payments };
         }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [defaultCurrency])
+    }, [defaultCurrency, vesBaseCurrency])
 
     const loadData = async () => {
         setLoading(true)
@@ -488,6 +488,18 @@ export function SalesTable() {
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Divisa Base VES</label>
+                                <Select value={vesBaseCurrency} onValueChange={(val: "usd" | "cop") => setVesBaseCurrency(val)}>
+                                    <SelectTrigger className="w-[160px]">
+                                        <SelectValue placeholder="Divisa" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="usd">USD Tarjeta</SelectItem>
+                                        <SelectItem value="cop">COP</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Divisa de Pago</label>

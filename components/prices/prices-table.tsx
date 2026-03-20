@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/select"
 import { Edit, Settings2, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
 
 export function PricesTable() {
     const [products, setProducts] = React.useState<Product[]>([])
@@ -75,9 +74,6 @@ export function PricesTable() {
     const [usdTarjeta, setUsdTarjeta] = React.useState("")
     const [usdFisico, setUsdFisico] = React.useState("")
     const [cop, setCop] = React.useState("")
-    const [exchangeType, setExchangeType] = React.useState<"usd" | "cop">("usd")
-    const [isCustomVes, setIsCustomVes] = React.useState(false)
-    const [customVes, setCustomVes] = React.useState("")
 
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -136,18 +132,7 @@ export function PricesTable() {
         setUsdTarjeta("")
         setUsdFisico("")
         setCop("")
-        setExchangeType("usd")
-        setIsCustomVes(false)
-        setCustomVes("")
         setCurrentProduct(null)
-    }
-
-    // Function to calculate VES dynamically based on Base Divisa
-    const calculateVes = (type: "usd" | "cop", valUsdTarjeta: number, valCop: number) => {
-        // USD base: USD Tarjeta * BCV rate = VES
-        if (type === "usd") return valUsdTarjeta * rates.bcv;
-        // COP base: direct COP to Bs conversion using Factor COP
-        return valCop / rates.cop;
     }
 
     // Function to calculate USD Fisico to COP
@@ -185,16 +170,15 @@ export function PricesTable() {
         const vUsdTarjeta = parseFloat(usdTarjeta) || 0
         const vUsdFisico = parseFloat(usdFisico) || 0
         const vCop = parseFloat(cop) || 0
-        const vVes = isCustomVes ? (parseFloat(customVes) || 0) : calculateVes(exchangeType, vUsdTarjeta, vCop)
 
         await api.createProductPrice({
             productId: selectedProductId,
             usdTarjeta: vUsdTarjeta,
             usdFisico: vUsdFisico,
             cop: vCop,
-            ves: vVes,
-            exchangeType,
-            isCustomVes,
+            ves: 0,
+            exchangeType: "usd",
+            isCustomVes: false,
             isCustomUsdTarjeta: false,
             isCustomUsdFisico: false,
             isCustomCop: false
@@ -214,15 +198,14 @@ export function PricesTable() {
         const vUsdTarjeta = parseFloat(usdTarjeta) || 0
         const vUsdFisico = parseFloat(usdFisico) || 0
         const vCop = parseFloat(cop) || 0
-        const vVes = isCustomVes ? (parseFloat(customVes) || 0) : calculateVes(exchangeType, vUsdTarjeta, vCop)
 
         await api.updateProductPrice(currentProduct.id, {
             usdTarjeta: vUsdTarjeta,
             usdFisico: vUsdFisico,
             cop: vCop,
-            ves: vVes,
-            exchangeType,
-            isCustomVes,
+            ves: 0,
+            exchangeType: "usd",
+            isCustomVes: false,
             isCustomUsdTarjeta: false,
             isCustomUsdFisico: false,
             isCustomCop: false
@@ -248,9 +231,6 @@ export function PricesTable() {
         setUsdTarjeta(prod.price?.usdTarjeta?.toString() || "0")
         setUsdFisico(prod.price?.usdFisico?.toString() || "0")
         setCop(prod.price?.cop?.toString() || "0")
-        setExchangeType(prod.price?.exchangeType || "usd")
-        setIsCustomVes(prod.price?.isCustomVes || false)
-        setCustomVes(prod.price?.ves?.toString() || "0")
         setIsEditOpen(true)
     }
 
@@ -302,19 +282,6 @@ export function PricesTable() {
                                                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                             ))
                                         )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Divisa Base (Cambio a Bs)</label>
-                                <Select value={exchangeType} onValueChange={(val: "usd" | "cop") => setExchangeType(val)} disabled={isSubmitting}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona la divisa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="usd">Dólares (USD)</SelectItem>
-                                        <SelectItem value="cop">Pesos Colombianos (COP)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -376,38 +343,6 @@ export function PricesTable() {
                                         disabled={isSubmitting}
                                     />
                                 </div>
-                            </div>
-
-                            <div className="space-y-4 border rounded-md p-4 bg-muted/30 mt-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <h4 className="text-sm font-medium">Precio en Bolívares (VES)</h4>
-                                        <div className="text-xs text-muted-foreground">
-                                            {isCustomVes ? "Valor establecido manualmente" : "Calculado base a Divisa Base"}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Switch id="custom-ves-1" checked={isCustomVes} onCheckedChange={setIsCustomVes} disabled={isSubmitting} />
-                                        <label htmlFor="custom-ves-1" className="text-xs">Fijar Manual</label>
-                                    </div>
-                                </div>
-                                {isCustomVes ? (
-                                    <div className="space-y-2 pt-2">
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            placeholder="Ej. 1500"
-                                            value={customVes}
-                                            onChange={(e) => setCustomVes(e.target.value)}
-                                            disabled={isSubmitting}
-                                            min="0"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="text-2xl font-semibold tracking-tight">
-                                        Bs. {calculateVes(exchangeType, parseFloat(usdTarjeta) || 0, parseFloat(cop) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </div>
-                                )}
                             </div>
 
                             <DialogFooter>
@@ -492,20 +427,19 @@ export function PricesTable() {
                             <TableHead>USD Tarjeta</TableHead>
                             <TableHead>USD Físico</TableHead>
                             <TableHead>Precio COP ($)</TableHead>
-                            <TableHead>Precio VES (Bs.)</TableHead>
                             <TableHead className="w-[100px] text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-24 text-center">
+                                <TableCell colSpan={5} className="h-24 text-center">
                                     Cargando...
                                 </TableCell>
                             </TableRow>
                         ) : pricedProducts.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                                     {debouncedSearch ? "No se encontraron precios." : "No hay precios asignados."}
                                 </TableCell>
                             </TableRow>
@@ -514,15 +448,12 @@ export function PricesTable() {
                                 // (Safety guard, though unpriced products are already filtered out)
                                 if (!prod.price) return null;
 
-                                const dynamicVes = prod.price.isCustomVes ? prod.price.ves : calculateVes(prod.price.exchangeType, prod.price.usdTarjeta, prod.price.cop);
-
                                 return (
                                     <TableRow key={prod.id}>
                                         <TableCell className="font-medium">{prod.name}</TableCell>
                                         <TableCell>${prod.price.usdTarjeta?.toFixed(2) || '0.00'}</TableCell>
                                         <TableCell>${prod.price.usdFisico?.toFixed(2) || '0.00'}</TableCell>
                                         <TableCell>${prod.price.cop.toLocaleString('es-CO')}</TableCell>
-                                        <TableCell>Bs. {dynamicVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end space-x-2">
                                                 <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>
@@ -643,19 +574,6 @@ export function PricesTable() {
                     </DialogHeader>
                     <form onSubmit={handleEditPrices} className="space-y-4">
                         <div className="grid gap-4 py-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Divisa Base (Cambio a Bs)</label>
-                                <Select value={exchangeType} onValueChange={(val: "usd" | "cop") => setExchangeType(val)} disabled={isSubmitting}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona la divisa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="usd">Dólares (USD)</SelectItem>
-                                        <SelectItem value="cop">Pesos Colombianos (COP)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">USD Tarjeta ($)</label>
@@ -714,38 +632,6 @@ export function PricesTable() {
                                     />
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="space-y-4 border rounded-md p-4 bg-muted/30 mt-4">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <h4 className="text-sm font-medium">Precio en Bolívares (VES)</h4>
-                                    <div className="text-xs text-muted-foreground">
-                                        {isCustomVes ? "Valor establecido manualmente" : "Calculado base a Divisa Base"}
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <Switch id="custom-ves-2" checked={isCustomVes} onCheckedChange={setIsCustomVes} disabled={isSubmitting} />
-                                    <label htmlFor="custom-ves-2" className="text-xs">Fijar Manual</label>
-                                </div>
-                            </div>
-                            {isCustomVes ? (
-                                <div className="space-y-2 pt-2">
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="Ej. 1500"
-                                        value={customVes}
-                                        onChange={(e) => setCustomVes(e.target.value)}
-                                        disabled={isSubmitting}
-                                        min="0"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="text-2xl font-semibold tracking-tight">
-                                    Bs. {calculateVes(exchangeType, parseFloat(usdTarjeta) || 0, parseFloat(cop) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </div>
-                            )}
                         </div>
                         <DialogFooter>
                             <Button type="submit" disabled={isSubmitting}>
