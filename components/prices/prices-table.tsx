@@ -522,7 +522,7 @@ export function PricesTable() {
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                                             <AlertDialogAction
-                                                                onClick={() => handleDeletePrice(prod.id)}
+                                                                onClick={() => handleDeletePrice(prod.price.id)}
                                                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                                             >
                                                                 Eliminar

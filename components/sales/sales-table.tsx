@@ -78,6 +78,7 @@ export function SalesTable() {
     // Product Command/Popover states
     const [openCombobox, setOpenCombobox] = React.useState(false)
     const [searchCombobox, setSearchCombobox] = React.useState("")
+    const [refreshTrigger, setRefreshTrigger] = React.useState(0)
     const [prodPage, setProdPage] = React.useState(1)
     const [hasMoreProds, setHasMoreProds] = React.useState(true)
     const [isLoadMoreProds, setIsLoadMoreProds] = React.useState(false)
@@ -215,7 +216,7 @@ export function SalesTable() {
             loadInitialProducts();
         }, 300);
         return () => clearTimeout(timer);
-    }, [searchCombobox]);
+    }, [searchCombobox, refreshTrigger]);
 
     // Load More Products API
     const loadMoreProducts = React.useCallback(async () => {
@@ -368,6 +369,7 @@ export function SalesTable() {
             });
 
             await loadData();
+            setRefreshTrigger(prev => prev + 1);
             resetForm();
         } catch (error: any) {
             console.error("Error creating sale", error);
