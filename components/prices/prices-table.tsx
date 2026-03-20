@@ -22,6 +22,17 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
     Pagination,
     PaginationContent,
     PaginationItem,
@@ -35,7 +46,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Edit, Settings2 } from "lucide-react"
+import { Edit, Settings2, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 
@@ -67,9 +78,6 @@ export function PricesTable() {
     const [exchangeType, setExchangeType] = React.useState<"usd" | "cop">("usd")
     const [isCustomVes, setIsCustomVes] = React.useState(false)
     const [customVes, setCustomVes] = React.useState("")
-    const [isCustomUsdTarjeta, setIsCustomUsdTarjeta] = React.useState(false)
-    const [isCustomUsdFisico, setIsCustomUsdFisico] = React.useState(false)
-    const [isCustomCop, setIsCustomCop] = React.useState(false)
 
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -131,19 +139,14 @@ export function PricesTable() {
         setExchangeType("usd")
         setIsCustomVes(false)
         setCustomVes("")
-        setIsCustomUsdTarjeta(false)
-        setIsCustomUsdFisico(false)
-        setIsCustomCop(false)
         setCurrentProduct(null)
     }
 
     // Function to calculate VES dynamically based on Base Divisa
     const calculateVes = (type: "usd" | "cop", valUsdTarjeta: number, valCop: number) => {
-        //  console.log("rates:", rates);
-        //  console.log("valUsdTarjeta:", valUsdTarjeta);
-        //  console.log("valUsdTarjeta * rates.bcv:", valUsdTarjeta * rates.bcv);
-
+        // USD base: USD Tarjeta * BCV rate = VES
         if (type === "usd") return valUsdTarjeta * rates.bcv;
+        // COP base: direct COP to Bs conversion using Factor COP
         return valCop / rates.cop;
     }
 
@@ -158,7 +161,7 @@ export function PricesTable() {
         const newRates = {
             cop: parseFloat(rateCop) || 1,
             bcv: parseFloat(rateBcv) || 1,
-            copUsd: parseFloat(rateCopUsd) || 3754
+            copUsd: parseFloat(rateCopUsd) || 3600
         }
         await api.updateExchangeRates(newRates)
 
@@ -170,7 +173,7 @@ export function PricesTable() {
     const openRatesConfig = () => {
         setRateCop(rates.cop.toString())
         setRateBcv(rates.bcv.toString())
-        setRateCopUsd(rates.copUsd?.toString() || "3754")
+        setRateCopUsd(rates.copUsd?.toString() || "3600")
         setIsRatesOpen(true)
     }
 
@@ -192,9 +195,9 @@ export function PricesTable() {
             ves: vVes,
             exchangeType,
             isCustomVes,
-            isCustomUsdTarjeta,
-            isCustomUsdFisico,
-            isCustomCop
+            isCustomUsdTarjeta: false,
+            isCustomUsdFisico: false,
+            isCustomCop: false
         })
 
         await loadData()
@@ -220,15 +223,24 @@ export function PricesTable() {
             ves: vVes,
             exchangeType,
             isCustomVes,
-            isCustomUsdTarjeta,
-            isCustomUsdFisico,
-            isCustomCop
+            isCustomUsdTarjeta: false,
+            isCustomUsdFisico: false,
+            isCustomCop: false
         })
 
         await loadData()
         setIsSubmitting(false)
         setIsEditOpen(false)
         resetForm()
+    }
+
+    const handleDeletePrice = async (productId: string) => {
+        try {
+            await api.deleteProductPrice(productId)
+            await loadData()
+        } catch (error) {
+            console.error("Failed to delete price", error)
+        }
     }
 
     const openEdit = (prod: Product) => {
@@ -239,9 +251,6 @@ export function PricesTable() {
         setExchangeType(prod.price?.exchangeType || "usd")
         setIsCustomVes(prod.price?.isCustomVes || false)
         setCustomVes(prod.price?.ves?.toString() || "0")
-        setIsCustomUsdTarjeta(prod.price?.isCustomUsdTarjeta || false)
-        setIsCustomUsdFisico(prod.price?.isCustomUsdFisico || false)
-        setIsCustomCop(prod.price?.isCustomCop || false)
         setIsEditOpen(true)
     }
 
@@ -312,13 +321,7 @@ export function PricesTable() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">USD Tarjeta ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-usd-tarjeta-1" checked={isCustomUsdTarjeta} onCheckedChange={setIsCustomUsdTarjeta} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-usd-tarjeta-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">USD Tarjeta ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -330,53 +333,24 @@ export function PricesTable() {
                                     <div className="text-xs text-muted-foreground">Úsalo para calcular VES.</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">USD Físico ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-usd-fisico-1" checked={isCustomUsdFisico} onCheckedChange={setIsCustomUsdFisico} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-usd-fisico-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">USD Físico ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
                                         placeholder="0.00"
                                         value={usdFisico}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setUsdFisico(val);
-                                            // Auto calc COP based on USD Fisico only if COP is not custom
-                                            if (!isCustomCop) {
-                                                const num = parseFloat(val) || 0;
-                                                setCop((num * rates.copUsd).toString());
-                                            }
-                                        }}
+                                        onChange={(e) => setUsdFisico(e.target.value)}
                                         disabled={isSubmitting}
                                     />
-                                    <div className="text-xs text-muted-foreground">Multiplica x {rates.copUsd} para dar COP.</div>
                                 </div>
                                 <div className="space-y-2 col-span-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">Precio COP ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-cop-1" checked={isCustomCop} onCheckedChange={setIsCustomCop} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-cop-1" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">Precio COP ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
                                         placeholder="0.00"
                                         value={cop}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setCop(val);
-                                            // Auto calc USD Fisico based on COP only if USD Fisico is not custom
-                                            if (!isCustomUsdFisico) {
-                                                const num = parseFloat(val) || 0;
-                                                setUsdFisico((num / rates.copUsd).toFixed(2).toString());
-                                            }
-                                        }}
+                                        onChange={(e) => setCop(e.target.value)}
                                         disabled={isSubmitting}
                                     />
                                 </div>
@@ -430,7 +404,7 @@ export function PricesTable() {
                     <DialogHeader>
                         <DialogTitle>Configurar Tasas de Cambio</DialogTitle>
                         <DialogDescription>
-                            Ajusta las tasas globales. BCV (Bs. por $1) y Factor COP (Pesos por Bs).
+                            Ajusta las tasas de cambio globales que afectan todos los precios.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSaveRates} className="space-y-4">
@@ -445,20 +419,8 @@ export function PricesTable() {
                                 min="0"
                                 required
                             />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <label className="text-right text-sm font-medium">Factor COP</label>
-                            <Input
-                                className="col-span-3"
-                                type="number"
-                                step="0.01"
-                                value={rateCop}
-                                onChange={(e) => setRateCop(e.target.value)}
-                                min="0"
-                                required
-                            />
                             <div className="col-span-4 text-xs text-muted-foreground ml-16">
-                                Ejemplo: si la tasa es 6500 COP = 1300 Bs, el factor es 5 (6500 / 5 = 1300).
+                                Bolívares por $1 USD. Ej: 455.25 significa que: <br /> $1 USD = 455.25 Bs.
                             </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -473,7 +435,22 @@ export function PricesTable() {
                                 required
                             />
                             <div className="col-span-4 text-xs text-muted-foreground ml-16">
-                                Tasa de conversión de Peso Colombiano a Dólar Físico (ej. 3754).
+                                Pesos Colombianos por $1 USD. Ej: 3600 significa que: <br /> $1 USD = 3600 COP.
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <label className="text-right text-sm font-medium">Factor COP/Bs</label>
+                            <Input
+                                className="col-span-3"
+                                type="number"
+                                step="0.01"
+                                value={rateCop}
+                                onChange={(e) => setRateCop(e.target.value)}
+                                min="0"
+                                required
+                            />
+                            <div className="col-span-4 text-xs text-muted-foreground ml-16">
+                                Factor de conversión directa COP → Bs. Ej: si el factor es 5, <br /> 6500 COP / 5 = 1300 Bs.
                             </div>
                         </div>
                         <DialogFooter>
@@ -521,13 +498,39 @@ export function PricesTable() {
                                     <TableRow key={prod.id}>
                                         <TableCell className="font-medium">{prod.name}</TableCell>
                                         <TableCell>${prod.price.usdTarjeta?.toFixed(2) || '0.00'}</TableCell>
-                                        <TableCell>${(prod.price.cop / rates.copUsd).toFixed(2)}</TableCell>
+                                        <TableCell>${prod.price.usdFisico?.toFixed(2) || '0.00'}</TableCell>
                                         <TableCell>${prod.price.cop.toLocaleString('es-CO')}</TableCell>
                                         <TableCell>Bs. {dynamicVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
+                                            <div className="flex items-center justify-end space-x-2">
+                                                <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon">
+                                                            <Trash2 className="w-4 h-4 text-destructive" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Eliminar precio?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Esto eliminará los precios asignados al producto "{prod.name}".
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                onClick={() => handleDeletePrice(prod.id)}
+                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                            >
+                                                                Eliminar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 )
@@ -633,13 +636,7 @@ export function PricesTable() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">USD Tarjeta ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-usd-tarjeta-2" checked={isCustomUsdTarjeta} onCheckedChange={setIsCustomUsdTarjeta} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-usd-tarjeta-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">USD Tarjeta ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -651,52 +648,23 @@ export function PricesTable() {
                                     <div className="text-xs text-muted-foreground">Para calcular VES.</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">USD Físico ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-usd-fisico-2" checked={isCustomUsdFisico} onCheckedChange={setIsCustomUsdFisico} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-usd-fisico-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">USD Físico ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
                                         value={usdFisico}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setUsdFisico(val);
-                                            // Auto calc COP based on USD Fisico only if COP is not custom
-                                            if (!isCustomCop) {
-                                                const num = parseFloat(val) || 0;
-                                                setCop((num * rates.copUsd).toString());
-                                            }
-                                        }}
+                                        onChange={(e) => setUsdFisico(e.target.value)}
                                         disabled={isSubmitting}
                                         min="0"
                                     />
-                                    <div className="text-xs text-muted-foreground">X {rates.copUsd} = COP.</div>
                                 </div>
                                 <div className="space-y-2 col-span-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-sm font-medium">COP ($)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <Switch id="custom-cop-2" checked={isCustomCop} onCheckedChange={setIsCustomCop} disabled={isSubmitting} size="sm" />
-                                            <label htmlFor="custom-cop-2" className="text-[10px] text-muted-foreground cursor-pointer">Fijo</label>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-medium">COP ($)</label>
                                     <Input
                                         type="number"
                                         step="0.01"
                                         value={cop}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setCop(val);
-                                            // Auto calc USD Fisico based on COP only if USD Fisico is not custom
-                                            if (!isCustomUsdFisico) {
-                                                const num = parseFloat(val) || 0;
-                                                setUsdFisico((num / rates.copUsd).toFixed(2).toString());
-                                            }
-                                        }}
+                                        onChange={(e) => setCop(e.target.value)}
                                         disabled={isSubmitting}
                                         min="0"
                                     />

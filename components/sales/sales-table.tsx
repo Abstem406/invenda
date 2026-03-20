@@ -96,6 +96,7 @@ export function SalesTable() {
         if (!p.price) return 0;
         if (p.price.isCustomVes) return p.price.ves;
         if (p.price.exchangeType === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
+        // COP base: direct COP to Bs conversion using Factor COP
         return (p.price.cop || 0) / rates.cop;
     }, [rates]);
 

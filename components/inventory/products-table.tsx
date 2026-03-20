@@ -249,6 +249,10 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                 <Dialog open={isCreateOpen} onOpenChange={(val) => {
                     setIsCreateOpen(val);
                     if (!val) resetForm();
+                    else {
+                        // Refetch categories when opening the create product modal to ensure we have the latest
+                        api.getCategories({ limit: 100 }).then(catsRes => setCategories(catsRes.data)).catch(console.error);
+                    }
                 }}>
                     <DialogTrigger asChild>
                         <Button size="sm" className="w-full sm:w-auto">
@@ -474,6 +478,10 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
             <Dialog open={isEditOpen} onOpenChange={(val) => {
                 setIsEditOpen(val);
                 if (!val) resetForm();
+                else {
+                    // Refetch categories when opening the edit product modal to ensure we have the latest
+                    api.getCategories({ limit: 100 }).then(catsRes => setCategories(catsRes.data)).catch(console.error);
+                }
             }}>
                 <DialogContent>
                     <DialogHeader>
