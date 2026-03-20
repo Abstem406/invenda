@@ -336,10 +336,21 @@ export function PricesTable() {
                                     <label className="text-sm font-medium">USD Físico ($)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="any"
                                         placeholder="0.00"
                                         value={usdFisico}
-                                        onChange={(e) => setUsdFisico(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setUsdFisico(val);
+                                            if (val !== "") {
+                                                const num = parseFloat(val);
+                                                if (!isNaN(num)) {
+                                                    setCop((num * rates.copUsd).toString());
+                                                }
+                                            } else {
+                                                setCop("");
+                                            }
+                                        }}
                                         disabled={isSubmitting}
                                     />
                                 </div>
@@ -347,10 +358,21 @@ export function PricesTable() {
                                     <label className="text-sm font-medium">Precio COP ($)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="any"
                                         placeholder="0.00"
                                         value={cop}
-                                        onChange={(e) => setCop(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setCop(val);
+                                            if (val !== "") {
+                                                const num = parseFloat(val);
+                                                if (!isNaN(num)) {
+                                                    setUsdFisico((num / rates.copUsd).toString());
+                                                }
+                                            } else {
+                                                setUsdFisico("");
+                                            }
+                                        }}
                                         disabled={isSubmitting}
                                     />
                                 </div>
@@ -651,9 +673,20 @@ export function PricesTable() {
                                     <label className="text-sm font-medium">USD Físico ($)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="any"
                                         value={usdFisico}
-                                        onChange={(e) => setUsdFisico(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setUsdFisico(val);
+                                            if (val !== "") {
+                                                const num = parseFloat(val);
+                                                if (!isNaN(num)) {
+                                                    setCop((num * rates.copUsd).toString());
+                                                }
+                                            } else {
+                                                setCop("");
+                                            }
+                                        }}
                                         disabled={isSubmitting}
                                         min="0"
                                     />
@@ -662,9 +695,20 @@ export function PricesTable() {
                                     <label className="text-sm font-medium">COP ($)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="any"
                                         value={cop}
-                                        onChange={(e) => setCop(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setCop(val);
+                                            if (val !== "") {
+                                                const num = parseFloat(val);
+                                                if (!isNaN(num)) {
+                                                    setUsdFisico((num / rates.copUsd).toString());
+                                                }
+                                            } else {
+                                                setUsdFisico("");
+                                            }
+                                        }}
                                         disabled={isSubmitting}
                                         min="0"
                                     />
