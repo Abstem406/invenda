@@ -245,7 +245,7 @@ export function PricesTable() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="max-w-xs"
                     />
-                    <Button variant="outline" size="sm" onClick={openRatesConfig} className="w-full sm:w-auto">
+                    <Button variant="outline" size="lg" onClick={openRatesConfig} className="w-full sm:w-auto text-md">
                         <Settings2 className="w-4 h-4 mr-2" />
                         Tasas de Cambio
                     </Button>
@@ -256,7 +256,7 @@ export function PricesTable() {
                     if (!val) resetForm();
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button size="lg" className="text-md">
                             Asignar Precios a Producto
                         </Button>
                     </DialogTrigger>

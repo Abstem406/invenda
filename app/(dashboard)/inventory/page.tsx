@@ -18,7 +18,7 @@ export default function InventoryPage() {
                 </div>
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="outline">
+                        <Button size="lg" variant="outline">
                             <Layers className="w-4 h-4 mr-2" />
                             Categorías de productos
                         </Button>

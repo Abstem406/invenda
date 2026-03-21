@@ -255,7 +255,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                     }
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm" className="w-full sm:w-auto">
+                        <Button size="lg" className="w-full sm:w-auto text-md">
                             <Plus className="w-4 h-4 mr-2" />
                             Nuevo Producto
                         </Button>

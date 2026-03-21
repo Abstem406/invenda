@@ -414,12 +414,12 @@ export function SalesTable() {
                     if (!val) resetForm();
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button size="lg" className="text-md">
                             <Plus className="w-4 h-4 mr-2" />
                             Nueva Venta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="lg:max-w-4xl">
+                    <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Registrar Nueva Venta</DialogTitle>
                             <DialogDescription>
@@ -597,58 +597,56 @@ export function SalesTable() {
                             </Table>
                         </div>
 
-                        {cart.length > 0 && (
-                            <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
-                                <div className="space-y-4 flex-1">
-                                    <h4 className="font-semibold mb-2">Estado General de Venta</h4>
-                                    <div className="space-y-2 pt-2">
-                                        <label className="text-sm font-medium">Condición del Cobro:</label>
-                                        <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
-                                            <SelectTrigger className="w-[180px]">
-                                                <SelectValue placeholder="Estado..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="pagado">Pagado Totalidad</SelectItem>
-                                                <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
-                                                <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2 pt-2 border-t mt-4">
-                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-xs">Billete/Monto USD Recibido:  </label>
-                                                <Input
-                                                    type="number"
-                                                    step="any"
-                                                    placeholder="Ej. 10.00"
-                                                    value={receivedUsdForChange}
-                                                    onChange={(e) => setReceivedUsdForChange(e.target.value)}
-                                                    className="w-[180px]"
-                                                />
-                                            </div>
-                                            {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
-                                                <div className="space-y-1">
-                                                    <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
-                                                    <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
-                                                        {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                        <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
+                            <div className="space-y-4 flex-1">
+                                <h4 className="font-semibold mb-2">Estado General de Venta</h4>
+                                <div className="space-y-2 pt-2">
+                                    <label className="text-sm font-medium">Condición del Cobro:</label>
+                                    <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Estado..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="pagado">Pagado Totalidad</SelectItem>
+                                            <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
+                                            <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-
-                                <div className="min-w-[250px] border-l pl-8 space-y-2 self-end md:self-stretch flex flex-col justify-center">
-                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 border-b pb-1">Recibido (Total Depositado)</h4>
-                                    <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span></div>
-                                    <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span></div>
-                                    <div className="text-xl font-medium tracking-tight text-green-600">${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span></div>
-                                    <div className="text-xl font-medium tracking-tight text-green-600">Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                <div className="space-y-2 pt-2 border-t mt-4">
+                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs pr-2">Billete/Monto USD Recibido:</label>
+                                            <Input
+                                                type="number"
+                                                step="any"
+                                                placeholder="Ej. 10.00"
+                                                value={receivedUsdForChange}
+                                                onChange={(e) => setReceivedUsdForChange(e.target.value)}
+                                                className="w-[180px]"
+                                            />
+                                        </div>
+                                        {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
+                                                <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
+                                                    {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        )}
+
+                            <div className="min-w-[250px] border-l pl-8 space-y-2 self-end md:self-stretch flex flex-col justify-center">
+                                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 border-b pb-1">Recibido (Total Depositado)</h4>
+                                <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span></div>
+                                <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span></div>
+                                <div className="text-xl font-medium tracking-tight text-green-600">${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span></div>
+                                <div className="text-xl font-medium tracking-tight text-green-600">Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            </div>
+                        </div>
 
                         {hasItemsWithoutPrice && saleStatus !== "fiado" && cart.length > 0 && (
                             <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">

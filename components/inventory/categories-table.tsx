@@ -184,7 +184,7 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                     }
                 }}>
                     <DialogTrigger asChild>
-                        <Button size="sm" className="w-full sm:w-auto">
+                        <Button size="lg" className="w-full sm:w-auto text-md">
                             <Plus className="w-4 h-4 mr-2" />
                             Nueva Categoría
                         </Button>
