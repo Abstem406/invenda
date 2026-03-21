@@ -420,7 +420,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                     <label className="text-sm font-medium">USD Tarjeta ($)</label>
                     <Input
                         type="number"
-                        step="0.01"
+                        step="any"
                         placeholder="0.00"
                         value={usdTarjeta}
                         onChange={(e) => {
