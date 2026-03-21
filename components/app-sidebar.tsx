@@ -12,7 +12,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Home, Package, DollarSign, User2, ShoppingCart, LogOut, KeyRound, Sun, Moon } from "lucide-react"
+import { Home, Package, User2, ShoppingCart, LogOut, KeyRound, Sun, Moon } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -52,11 +52,6 @@ const items = [
         title: "Inventario",
         url: "/inventory",
         icon: Package,
-    },
-    {
-        title: "Precios",
-        url: "/prices",
-        icon: DollarSign,
     },
     {
         title: "Ventas",

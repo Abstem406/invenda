@@ -238,7 +238,9 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                         ) : (
                             categories.map((cat) => (
                                 <TableRow key={cat.id}>
-                                    <TableCell className="font-medium">{cat.name}</TableCell>
+                                    <TableCell className="font-medium max-w-[150px] sm:max-w-[300px] truncate" title={cat.name}>
+                                        {cat.name}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
                                             <Button variant="ghost" size="icon" onClick={() => openEdit(cat)}>
