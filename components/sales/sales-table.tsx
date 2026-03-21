@@ -492,7 +492,7 @@ export function SalesTable() {
                                 </Popover>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Divisa Base VES</label>
+                                <label className="text-sm font-medium">Divisa cambio a Bs.</label>
                                 <Select value={vesBaseCurrency} onValueChange={(val: "usd" | "cop") => setVesBaseCurrency(val)}>
                                     <SelectTrigger className="w-[160px]">
                                         <SelectValue placeholder="Divisa" />
@@ -504,7 +504,7 @@ export function SalesTable() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Divisa de Pago</label>
+                                <label className="text-sm font-medium">Metodo de pago</label>
                                 <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)}>
                                     <SelectTrigger className="w-[160px]">
                                         <SelectValue placeholder="Sin auto-pago" />
@@ -618,7 +618,7 @@ export function SalesTable() {
                                         <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                             <div className="space-y-1">
-                                                <label className="text-xs">Billete/Monto USD Recibido:</label>
+                                                <label className="text-xs">Billete/Monto USD Recibido:  </label>
                                                 <Input
                                                     type="number"
                                                     step="any"
