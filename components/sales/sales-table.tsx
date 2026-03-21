@@ -87,6 +87,7 @@ export function SalesTable() {
     const [saleStatus, setSaleStatus] = React.useState<"pagado" | "fiado" | "debiendo">("pagado")
     const [defaultCurrency, setDefaultCurrency] = React.useState<"none" | "usdFisico" | "usdTarjeta" | "cop" | "ves">("none")
     const [vesBaseCurrency, setVesBaseCurrency] = React.useState<"usd" | "cop">("usd")
+    const [receivedUsdForChange, setReceivedUsdForChange] = React.useState("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [checkoutError, setCheckoutError] = React.useState<string | null>(null)
 
@@ -272,6 +273,7 @@ export function SalesTable() {
         setSearchCombobox("")
         setSaleStatus("pagado")
         setDefaultCurrency("none")
+        setReceivedUsdForChange("")
         setCheckoutError(null)
     }
 
@@ -611,6 +613,30 @@ export function SalesTable() {
                                                 <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                    </div>
+                                    <div className="space-y-2 pt-2 border-t mt-4">
+                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs">Billete/Monto USD Recibido:</label>
+                                                <Input
+                                                    type="number"
+                                                    step="any"
+                                                    placeholder="Ej. 10.00"
+                                                    value={receivedUsdForChange}
+                                                    onChange={(e) => setReceivedUsdForChange(e.target.value)}
+                                                    className="w-[180px]"
+                                                />
+                                            </div>
+                                            {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
+                                                    <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
+                                                        {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
