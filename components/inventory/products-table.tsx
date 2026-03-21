@@ -48,6 +48,7 @@ import {
     PaginationPrevious,
 } from "@/components/ui/pagination"
 import { Edit, Plus, Trash2, ArrowUpDown, Settings2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 
 export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
     const [products, setProducts] = React.useState<Product[]>([])
@@ -79,6 +80,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
     const [usdTarjeta, setUsdTarjeta] = React.useState("")
     const [usdFisico, setUsdFisico] = React.useState("")
     const [cop, setCop] = React.useState("")
+    const [syncUsdPrices, setSyncUsdPrices] = React.useState(false)
 
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [error, setError] = React.useState("")
@@ -156,6 +158,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
         setUsdTarjeta("")
         setUsdFisico("")
         setCop("")
+        setSyncUsdPrices(false)
         setCurrentProduct(null)
         setError("")
     }
@@ -375,7 +378,43 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
     // Price fields JSX used in both create and edit dialogs
     const renderPriceFields = () => (
         <div className="space-y-3 border-t pt-4 mt-2">
-            <h4 className="text-sm font-semibold text-muted-foreground">Precios del Producto</h4>
+            <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-muted-foreground">Precios del Producto</h4>
+                <div className="flex items-center space-x-2">
+                    <Switch
+                        id="sync-prices"
+                        checked={syncUsdPrices}
+                        onCheckedChange={(checked) => {
+                            setSyncUsdPrices(checked);
+                            if (checked) {
+                                let shouldRecalculateCop = false;
+                                let valToRecalculate = "";
+                                if (usdTarjeta && !usdFisico) {
+                                    setUsdFisico(usdTarjeta);
+                                    shouldRecalculateCop = true;
+                                    valToRecalculate = usdTarjeta;
+                                } else if (usdFisico && !usdTarjeta) {
+                                    setUsdTarjeta(usdFisico);
+                                } else if (usdTarjeta && usdFisico && usdTarjeta !== usdFisico) {
+                                    setUsdFisico(usdTarjeta);
+                                    shouldRecalculateCop = true;
+                                    valToRecalculate = usdTarjeta;
+                                }
+
+                                if (shouldRecalculateCop && valToRecalculate !== "") {
+                                    const num = parseFloat(valToRecalculate);
+                                    if (!isNaN(num)) {
+                                        // Usamos toFixed para redondear pequeños errores de coma flotante
+                                        setCop(parseFloat((num * rates.copUsd).toFixed(4)).toString());
+                                    }
+                                }
+                            }
+                        }}
+                        disabled={isSubmitting}
+                    />
+                    <label htmlFor="sync-prices" className="text-sm cursor-pointer whitespace-nowrap">Igualar precios USD</label>
+                </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                     <label className="text-sm font-medium">USD Tarjeta ($)</label>
@@ -384,7 +423,21 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                         step="0.01"
                         placeholder="0.00"
                         value={usdTarjeta}
-                        onChange={(e) => setUsdTarjeta(e.target.value)}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setUsdTarjeta(val);
+                            if (syncUsdPrices) {
+                                setUsdFisico(val);
+                                if (val !== "") {
+                                    const num = parseFloat(val);
+                                    if (!isNaN(num)) {
+                                        setCop((num * rates.copUsd).toString());
+                                    }
+                                } else {
+                                    setCop("");
+                                }
+                            }
+                        }}
                         disabled={isSubmitting}
                         min="0"
                         required
@@ -401,6 +454,9 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                         onChange={(e) => {
                             const val = e.target.value;
                             setUsdFisico(val);
+                            if (syncUsdPrices) {
+                                setUsdTarjeta(val);
+                            }
                             if (val !== "") {
                                 const num = parseFloat(val);
                                 if (!isNaN(num)) {
@@ -428,10 +484,13 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                             if (val !== "") {
                                 const num = parseFloat(val);
                                 if (!isNaN(num)) {
-                                    setUsdFisico((num / rates.copUsd).toString());
+                                    const usdVal = (num / rates.copUsd).toString();
+                                    setUsdFisico(usdVal);
+                                    if (syncUsdPrices) setUsdTarjeta(usdVal);
                                 }
                             } else {
                                 setUsdFisico("");
+                                if (syncUsdPrices) setUsdTarjeta("");
                             }
                         }}
                         disabled={isSubmitting}
