@@ -419,7 +419,7 @@ export function SalesTable() {
                             Nueva Venta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+                    <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] flex flex-col overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Registrar Nueva Venta</DialogTitle>
                             <DialogDescription>
@@ -520,7 +520,7 @@ export function SalesTable() {
                             </div>
                         </div>
 
-                        <div className="border rounded-md mt-4 max-h-[300px] overflow-y-auto">
+                        <div className="border rounded-md mt-4 flex-1 overflow-y-auto min-h-[200px]">
                             <Table>
                                 <TableHeader className="sticky top-0 bg-background z-10">
                                     <TableRow>
