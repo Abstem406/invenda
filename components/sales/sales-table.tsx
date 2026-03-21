@@ -474,7 +474,7 @@ export function SalesTable() {
                                                                 }}
                                                             >
                                                                 <div className="flex items-center justify-between w-full">
-                                                                    <span>{p.name} <span className="text-muted-foreground text-xs ml-2">(${p.price?.usdFisico || 0} USD)</span></span>
+                                                                    <span>{p.name}</span>
                                                                     <span className="font-mono text-muted-foreground mr-2 text-xs">Stock: {p.stock}</span>
                                                                 </div>
                                                             </CommandItem>
