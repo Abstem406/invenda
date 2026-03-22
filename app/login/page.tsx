@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 
 import { Button } from "@/components/ui/button";
@@ -43,10 +44,15 @@ export default function LoginPage() {
     return (
         <div className="w-full max-w-md px-4">
             {/* Branding */}
-            <div className="text-center mb-8">
-                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                    Invenda
-                </h1>
+            <div className="flex flex-col items-center mb-8">
+                <Image
+                    src="/la_exquisita.svg"
+                    alt="La Exquisita Logo"
+                    width={220}
+                    height={220}
+                    priority
+                    className="mb-4"
+                />
                 <p className="text-muted-foreground mt-2 text-sm">
                     Sistema de gestión de inventario y ventas
                 </p>

@@ -132,7 +132,7 @@ export function AppSidebar() {
             <Sidebar collapsible="icon" className="w-[280px]">
                 <SidebarHeader className="p-4 flex items-center h-16 border-b">
                     <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-                        <span className="font-bold text-xl truncate">Invenda</span>
+                        <span className="font-bold text-xl truncate">LA EXQUISITA</span>
                     </div>
                 </SidebarHeader>
 
