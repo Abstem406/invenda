@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils"
 interface CartItem {
     product: Product;
     quantity: number;
+    vesBaseCurrency: "usd" | "cop";
     payments: {
         usdTarjeta: number;
         usdFisico: number;
@@ -86,7 +87,6 @@ export function SalesTable() {
 
     const [saleStatus, setSaleStatus] = React.useState<"pagado" | "fiado" | "debiendo">("pagado")
     const [defaultCurrency, setDefaultCurrency] = React.useState<"none" | "usdFisico" | "usdTarjeta" | "cop" | "ves">("none")
-    const [vesBaseCurrency, setVesBaseCurrency] = React.useState<"usd" | "cop">("usd")
     const [receivedUsdForChange, setReceivedUsdForChange] = React.useState("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [checkoutError, setCheckoutError] = React.useState<string | null>(null)
@@ -97,12 +97,12 @@ export function SalesTable() {
     const [detailProductNames, setDetailProductNames] = React.useState<Record<string, string>>({})
     const [isLoadingDetails, setIsLoadingDetails] = React.useState(false)
 
-    const getDynamicVes = React.useCallback((p: Product) => {
+    const getDynamicVes = React.useCallback((p: Product, baseCurrency: "usd" | "cop") => {
         if (!p.price) return 0;
-        if (vesBaseCurrency === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
+        if (baseCurrency === "usd") return (p.price.usdTarjeta || 0) * rates.bcv;
         // COP base: COP / Factor COP = Bs
         return (p.price.cop || 0) / rates.cop;
-    }, [rates, vesBaseCurrency]);
+    }, [rates]);
 
     // Derived Grand Totals (What the customer ACTUALLY deposited)
     const receivedTotals = React.useMemo(() => {
@@ -121,7 +121,7 @@ export function SalesTable() {
         let uT = 0, uF = 0, c = 0, v = 0;
         cart.forEach(item => {
             const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
-            let unitVes = getDynamicVes(item.product);
+            let unitVes = getDynamicVes(item.product, item.vesBaseCurrency);
 
             uT += ((p.usdTarjeta || 0) * item.quantity);
             uF += ((p.usdFisico || 0) * item.quantity);
@@ -158,7 +158,7 @@ export function SalesTable() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, debouncedSearch, limit])
 
-    // When defaultCurrency or vesBaseCurrency changes, recalculate ALL cart items payments immediately
+    // When defaultCurrency changes, recalculate ALL cart items payments immediately
     React.useEffect(() => {
         if (cart.length === 0) return;
         setCart(prev => prev.map(item => {
@@ -168,12 +168,12 @@ export function SalesTable() {
                 if (defaultCurrency === "usdFisico") payments.usdFisico = (p.usdFisico || 0) * item.quantity;
                 else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = (p.usdTarjeta || 0) * item.quantity;
                 else if (defaultCurrency === "cop") payments.cop = (p.cop || 0) * item.quantity;
-                else if (defaultCurrency === "ves") payments.ves = getDynamicVes(item.product) * item.quantity;
+                else if (defaultCurrency === "ves") payments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * item.quantity;
             }
             return { ...item, payments };
         }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [defaultCurrency, vesBaseCurrency])
+    }, [defaultCurrency])
 
     const loadData = async () => {
         setLoading(true)
@@ -287,6 +287,8 @@ export function SalesTable() {
         // Check if already in cart
         if (cart.find(c => c.product.id === prod.id)) return;
 
+        const initialVesBaseCurrency = "usd";
+
         // Auto-fill payment based on the selected default currency
         const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
         if (defaultCurrency && defaultCurrency !== "none") {
@@ -294,12 +296,13 @@ export function SalesTable() {
             if (defaultCurrency === "usdFisico") payments.usdFisico = defaultPrice.usdFisico || 0;
             else if (defaultCurrency === "usdTarjeta") payments.usdTarjeta = defaultPrice.usdTarjeta || 0;
             else if (defaultCurrency === "cop") payments.cop = defaultPrice.cop || 0;
-            else if (defaultCurrency === "ves") payments.ves = getDynamicVes(prod);
+            else if (defaultCurrency === "ves") payments.ves = getDynamicVes(prod, initialVesBaseCurrency);
         }
 
         setCart(prev => [...prev, {
             product: prod,
             quantity: 1,
+            vesBaseCurrency: initialVesBaseCurrency,
             payments
         }]);
         setOpenCombobox(false);
@@ -330,7 +333,7 @@ export function SalesTable() {
                     if (defaultCurrency === "usdFisico") updatedPayments.usdFisico = (p.usdFisico || 0) * safeQty;
                     else if (defaultCurrency === "usdTarjeta") updatedPayments.usdTarjeta = (p.usdTarjeta || 0) * safeQty;
                     else if (defaultCurrency === "cop") updatedPayments.cop = (p.cop || 0) * safeQty;
-                    else if (defaultCurrency === "ves") updatedPayments.ves = getDynamicVes(item.product) * safeQty;
+                    else if (defaultCurrency === "ves") updatedPayments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * safeQty;
                 }
                 return { ...item, quantity: safeQty, payments: updatedPayments };
             }
@@ -340,6 +343,21 @@ export function SalesTable() {
 
     const removeFromCart = (productId: string) => {
         setCart(prev => prev.filter(item => item.product.id !== productId));
+    }
+
+    const updateItemVesBaseCurrency = (productId: string, val: "usd" | "cop") => {
+        setCart(prev => prev.map(item => {
+            if (item.product.id === productId) {
+                const updatedItem = { ...item, vesBaseCurrency: val };
+                // Also recalculate ves default payment if needed
+                const updatedPayments = { ...updatedItem.payments };
+                if (defaultCurrency === "ves") {
+                    updatedPayments.ves = getDynamicVes(updatedItem.product, val) * updatedItem.quantity;
+                }
+                return { ...updatedItem, payments: updatedPayments };
+            }
+            return item;
+        }));
     }
 
     const handleCheckout = async () => {
@@ -356,13 +374,13 @@ export function SalesTable() {
                         quantity: c.quantity,
                         unitPrice: {
                             ...safePrice,
-                            ves: getDynamicVes(c.product)
+                            ves: getDynamicVes(c.product, c.vesBaseCurrency)
                         },
                         totalPrice: {
                             usdTarjeta: (safePrice.usdTarjeta || 0) * c.quantity,
                             usdFisico: (safePrice.usdFisico || 0) * c.quantity,
                             cop: (safePrice.cop || 0) * c.quantity,
-                            ves: getDynamicVes(c.product) * c.quantity,
+                            ves: getDynamicVes(c.product, c.vesBaseCurrency) * c.quantity,
                             exchangeType: safePrice.exchangeType
                         },
                         payments: c.payments
@@ -529,18 +547,7 @@ export function SalesTable() {
                                     </PopoverContent>
                                 </Popover>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Divisa cambio a Bs.</label>
-                                <Select value={vesBaseCurrency} onValueChange={(val: "usd" | "cop") => setVesBaseCurrency(val)}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="Divisa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="usd">USD Tarjeta</SelectItem>
-                                        <SelectItem value="cop">COP</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {/* Removed global Divisa select. Moved to individual product level within the table.*/}
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Metodo de pago</label>
                                 <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)}>
@@ -564,7 +571,7 @@ export function SalesTable() {
                                     <TableRow>
                                         <TableHead>Producto</TableHead>
                                         <TableHead className="w-[80px]">Cant.</TableHead>
-                                        <TableHead>Total Adeudado</TableHead>
+                                        <TableHead className="w-[180px]">Total Adeudado</TableHead>
                                         <TableHead>Pagos del Cliente</TableHead>
                                         <TableHead className="w-[50px] text-right"></TableHead>
                                     </TableRow>
@@ -579,7 +586,7 @@ export function SalesTable() {
                                     ) : (
                                         cart.map((item) => {
                                             const p = item.product;
-                                            const unitVes = getDynamicVes(p);
+                                            const unitVes = getDynamicVes(p, item.vesBaseCurrency);
                                             return (
                                                 <TableRow key={p.id}>
                                                     <TableCell className="font-medium align-top py-4">{p.name}</TableCell>
@@ -594,12 +601,23 @@ export function SalesTable() {
                                                         />
                                                         <div className="text-[10px] text-muted-foreground mt-1 text-center">Máx: {p.stock}</div>
                                                     </TableCell>
-                                                    <TableCell className="align-top py-4">
+                                                    <TableCell className="align-top py-4 ">
                                                         <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
+                                                            <div className="flex flex-col gap-1 mb-4">
+                                                                <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
+                                                                    <SelectTrigger className="h-7 w-full text-xs px-2 py-0 border-muted">
+                                                                        <SelectValue placeholder="Base..." />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
+                                                                        <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
                                                             <div className="font-medium text-foreground">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)</div>
                                                             <div className="text-muted-foreground">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)</div>
                                                             <div className="text-muted-foreground">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP</div>
-                                                            <div className="text-muted-foreground">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                                                            <div className="text-muted-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="align-top py-2">
@@ -679,10 +697,18 @@ export function SalesTable() {
 
                             <div className="min-w-[250px] border-l pl-8 space-y-2 self-end md:self-stretch flex flex-col justify-center">
                                 <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 border-b pb-1">Recibido (Total Depositado)</h4>
-                                <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span></div>
-                                <div className="text-2xl font-bold tracking-tight text-green-600">${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span></div>
-                                <div className="text-xl font-medium tracking-tight text-green-600">${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span></div>
-                                <div className="text-xl font-medium tracking-tight text-green-600">Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdFisico" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                    ${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span>
+                                </div>
+                                <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdTarjeta" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                    ${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span>
+                                </div>
+                                <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "cop" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                    ${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span>
+                                </div>
+                                <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "ves" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                    Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
                             </div>
                         </div>
 
