@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { api, User } from "@/lib/services/api"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
     Table,
     TableBody,
@@ -47,9 +48,11 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Edit, Plus, Search, ShieldAlert, Trash2 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/lib/auth-context"
 
 export function UsersTable() {
+    const isMobile = useIsMobile()
     const { user } = useAuth()
     const [users, setUsers] = React.useState<User[]>([])
     const [loading, setLoading] = React.useState(true)
@@ -330,83 +333,146 @@ export function UsersTable() {
                 <div className="text-destructive text-sm font-medium">{error}</div>
             )}
 
-            {/* Table wrapper with overflow for responsive */}
-            <div className="border rounded-md overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Rol</TableHead>
-                            <TableHead className="hidden md:table-cell">Creado en</TableHead>
-                            <TableHead className="w-[100px] text-right">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
+            {/* Mobile Card View */}
+            {isMobile ? (
+                <div className="space-y-3">
+                    {loading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                        ))
+                    ) : users.length === 0 ? (
+                        <div className="h-24 flex items-center justify-center text-muted-foreground">
+                            {debouncedSearch ? "No se encontraron usuarios que coincidan con la búsqueda." : "No hay otros usuarios registrados."}
+                        </div>
+                    ) : (
+                        users.map((u) => (
+                            <div key={u.id} className="border rounded-lg p-4 space-y-3 bg-card">
+                                <div className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-sm truncate">{u.name}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ${u.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-muted text-foreground'}`}>
+                                        {u.role === 'ADMIN' ? 'Admin' : 'Cajero'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-end gap-1 pt-1 border-t">
+                                    <Button variant="ghost" size="sm" onClick={() => openEdit(u)}>
+                                        <Edit className="w-4 h-4 mr-1" /> Editar
+                                    </Button>
+                                    {u.id !== user?.id && (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="text-destructive">
+                                                    <Trash2 className="w-4 h-4 mr-1" /> Eliminar
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Se eliminará permanentemente al usuario
+                                                        &quot;{u.name || u.email}&quot; del sistema.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDeleteUser(u.id)}
+                                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                    >
+                                                        Eliminar
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ) : (
+                <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
-                                    Cargando usuarios...
-                                </TableCell>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Rol</TableHead>
+                                <TableHead className="hidden md:table-cell">Creado en</TableHead>
+                                <TableHead className="w-[100px] text-right">Acciones</TableHead>
                             </TableRow>
-                        ) : users.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                    {debouncedSearch ? "No se encontraron usuarios que coincidan con la búsqueda." : "No hay otros usuarios registrados."}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            users.map((u) => (
-                                <TableRow key={u.id}>
-                                    <TableCell className="font-medium">{u.name}</TableCell>
-                                    <TableCell>{u.email}</TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-muted text-foreground'}`}>
-                                            {u.role === 'ADMIN' ? 'Admin' : 'Cajero'}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-1">
-                                            <Button variant="ghost" size="icon" onClick={() => openEdit(u)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                            {/* Prevent deleting yourself */}
-                                            {u.id !== user?.id && (
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="text-destructive">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta acción no se puede deshacer. Se eliminará permanentemente al usuario
-                                                                &quot;{u.name || u.email}&quot; del sistema.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction
-                                                                onClick={() => handleDeleteUser(u.id)}
-                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                            >
-                                                                Eliminar
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            )}
-                                        </div>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        {Array.from({ length: 5 }).map((_, j) => (
+                                            <TableCell key={j}>
+                                                <Skeleton className="h-4 w-full" />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            ) : users.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        {debouncedSearch ? "No se encontraron usuarios que coincidan con la búsqueda." : "No hay otros usuarios registrados."}
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                            ) : (
+                                users.map((u) => (
+                                    <TableRow key={u.id}>
+                                        <TableCell className="font-medium">{u.name}</TableCell>
+                                        <TableCell>{u.email}</TableCell>
+                                        <TableCell>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-muted text-foreground'}`}>
+                                                {u.role === 'ADMIN' ? 'Admin' : 'Cajero'}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => openEdit(u)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                {u.id !== user?.id && (
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="text-destructive">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará permanentemente al usuario
+                                                                    &quot;{u.name || u.email}&quot; del sistema.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    onClick={() => handleDeleteUser(u.id)}
+                                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                                >
+                                                                    Eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
                 <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">

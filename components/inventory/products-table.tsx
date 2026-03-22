@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { api, Product, Category, ExchangeRates } from "@/lib/services/api"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
     Table,
     TableBody,
@@ -49,8 +50,10 @@ import {
 } from "@/components/ui/pagination"
 import { Edit, Plus, Trash2, ArrowUpDown, Settings2 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
+    const isMobile = useIsMobile()
     const [products, setProducts] = React.useState<Product[]>([])
     const [categories, setCategories] = React.useState<Category[]>([])
     const [rates, setRates] = React.useState<ExchangeRates>({ cop: 5, bcv: 435, copUsd: 3754 })
@@ -617,102 +620,188 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                 </Dialog>
             </div>
 
-            <div className="border rounded-md">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Categoría</TableHead>
-                            <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
-                                    className="-ml-4 h-8 data-[state=open]:bg-accent"
-                                >
-                                    Stock
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                </Button>
-                            </TableHead>
-                            <TableHead>USD Tarjeta</TableHead>
-                            <TableHead>USD Físico</TableHead>
-                            <TableHead>COP</TableHead>
-                            <TableHead className="w-[100px] text-right">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-24 text-center">
-                                    Cargando...
-                                </TableCell>
-                            </TableRow>
-                        ) : products.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                                    {debouncedSearch ? "No se encontraron productos." : "No hay productos registrados."}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            sortedProducts.map((prod) => (
-                                <TableRow key={prod.id}>
-                                    <TableCell className="font-medium max-w-[150px] sm:max-w-[300px] truncate" title={prod.name}>{prod.name}</TableCell>
-                                    <TableCell>
-                                        {prod.status === 1 ? (
-                                            <Badge className="w-[100px] justify-center bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">Activo </Badge>
-                                        ) : (
-                                            <Badge variant="destructive" className="w-[100px] justify-center bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">Inactivo </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>{getCategoryName(prod.categoryId)}</TableCell>
-                                    <TableCell>{prod.stock}</TableCell>
-                                    <TableCell>
-                                        {prod.price ? `$${prod.price.usdTarjeta?.toFixed(2)}` : <span className="text-muted-foreground">—</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        {prod.price ? `$${prod.price.usdFisico?.toFixed(2)}` : <span className="text-muted-foreground">—</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        {prod.price ? `$${prod.price.cop?.toLocaleString('es-CO')}` : <span className="text-muted-foreground">—</span>}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="text-destructive">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente
-                                                            &quot;{prod.name}&quot;.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            onClick={() => handleDelete(prod.id)}
-                                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                        >
-                                                            Eliminar
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+            {/* Mobile Card View */}
+            {isMobile ? (
+                <div className="space-y-3">
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                            <Skeleton key={i} className="h-32 w-full rounded-xl" />
+                        ))
+                    ) : products.length === 0 ? (
+                        <div className="h-24 flex items-center justify-center text-muted-foreground">
+                            {debouncedSearch ? "No se encontraron productos." : "No hay productos registrados."}
+                        </div>
+                    ) : (
+                        sortedProducts.map((prod) => (
+                            <div key={prod.id} className="border rounded-lg p-4 space-y-3 bg-card relative overflow-hidden">
+                                <div className="flex items-start justify-between">
+                                    <div className="pr-4">
+                                        <span className="font-semibold text-base line-clamp-2 leading-tight">{prod.name}</span>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                            {prod.status === 1 ? (
+                                                <Badge className="bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">Activo</Badge>
+                                            ) : (
+                                                <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">Inactivo</Badge>
+                                            )}
                                         </div>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0">
+                                        <span className={`text-xl font-bold ${prod.stock < 10 ? "text-destructive" : "text-primary"}`}>
+                                            {prod.stock}
+                                        </span>
+                                        <span className="text-[10px] font-medium uppercase text-muted-foreground tracking-wider">Stock</span>
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-muted-foreground">
+                                    <span>{getCategoryName(prod.categoryId)}</span>
+                                </div>
+                                {
+                                    prod.price && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline" className="text-xs">${prod.price.usdTarjeta?.toFixed(2)} USD T</Badge>
+                                            <Badge variant="outline" className="text-xs">${prod.price.usdFisico?.toFixed(2)} USD F</Badge>
+                                            <Badge variant="outline" className="text-xs">${prod.price.cop?.toLocaleString('es-CO')} COP</Badge>
+                                        </div>
+                                    )
+                                }
+                                < div className="flex justify-end gap-1 pt-1 border-t" >
+                                    <Button variant="ghost" size="sm" onClick={() => openEdit(prod)}>
+                                        <Edit className="w-4 h-4 mr-1" /> Editar
+                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="text-destructive">
+                                                <Trash2 className="w-4 h-4 mr-1" /> Eliminar
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Esta acción no se puede deshacer. Esto eliminará permanentemente
+                                                    &quot;{prod.name}&quot;.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    onClick={() => handleDelete(prod.id)}
+                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                >
+                                                    Eliminar
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                            </div>
+                        ))
+                    )
+                    }
+                </div >
+            ) : (
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead>Categoría</TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                                        className="-ml-4 h-8 data-[state=open]:bg-accent"
+                                    >
+                                        Stock
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>USD Tarjeta</TableHead>
+                                <TableHead>USD Físico</TableHead>
+                                <TableHead>COP</TableHead>
+                                <TableHead className="w-[100px] text-right">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                Array.from({ length: limit }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        {Array.from({ length: 8 }).map((_, j) => (
+                                            <TableCell key={j}>
+                                                <Skeleton className="h-4 w-full" />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            ) : products.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                        {debouncedSearch ? "No se encontraron productos." : "No hay productos registrados."}
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                            ) : (
+                                sortedProducts.map((prod) => (
+                                    <TableRow key={prod.id}>
+                                        <TableCell className="font-medium max-w-[150px] sm:max-w-[300px] truncate" title={prod.name}>{prod.name}</TableCell>
+                                        <TableCell>
+                                            {prod.status === 1 ? (
+                                                <Badge className="w-[100px] justify-center bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">Activo </Badge>
+                                            ) : (
+                                                <Badge variant="destructive" className="w-[100px] justify-center bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">Inactivo </Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>{getCategoryName(prod.categoryId)}</TableCell>
+                                        <TableCell>{prod.stock}</TableCell>
+                                        <TableCell>
+                                            {prod.price ? `$${prod.price.usdTarjeta?.toFixed(2)}` : <span className="text-muted-foreground">—</span>}
+                                        </TableCell>
+                                        <TableCell>
+                                            {prod.price ? `$${prod.price.usdFisico?.toFixed(2)}` : <span className="text-muted-foreground">—</span>}
+                                        </TableCell>
+                                        <TableCell>
+                                            {prod.price ? `$${prod.price.cop?.toLocaleString('es-CO')}` : <span className="text-muted-foreground">—</span>}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => openEdit(prod)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="text-destructive">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Esto eliminará permanentemente
+                                                                &quot;{prod.name}&quot;.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                onClick={() => handleDelete(prod.id)}
+                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                            >
+                                                                Eliminar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
                 <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
@@ -959,6 +1048,6 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                     </form>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }

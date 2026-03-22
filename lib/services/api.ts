@@ -94,7 +94,7 @@ export interface Sale {
     deletedAt?: string | null;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://Abstem-PC.local:3000/api";
 
 // Flag to prevent concurrent refresh attempts
 let isRefreshing = false;

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { api, Sale, ExchangeRates, Product } from "@/lib/services/api"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
     Table,
     TableBody,
@@ -38,6 +39,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
     Command,
     CommandEmpty,
@@ -67,6 +69,7 @@ interface CartItem {
 }
 
 export function SalesTable() {
+    const isMobile = useIsMobile()
     const [sales, setSales] = React.useState<Sale[]>([])
     const [products, setProducts] = React.useState<Product[]>([])
     const [rates, setRates] = React.useState<ExchangeRates>({ cop: 5, bcv: 435, copUsd: 3754 })
@@ -475,258 +478,342 @@ export function SalesTable() {
                             Nueva Venta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] flex flex-col overflow-y-auto">
-                        <DialogHeader>
+                    <DialogContent className="max-w-[100vw] sm:max-w-[95vw] w-full sm:w-[95vw] h-[100dvh] sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6 rounded-none sm:rounded-lg">
+                        <DialogHeader className="shrink-0">
                             <DialogTitle>Registrar Nueva Venta</DialogTitle>
                             <DialogDescription>
                                 Agrega los productos al carrito, ajusta cantidades y procesa el pago.
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="flex gap-4 items-end mt-2">
-                            <div className="flex-1 space-y-2">
-                                <label className="text-sm font-medium">Agregar Producto al Carrito</label>
-                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openCombobox}
-                                            className="w-full justify-between"
-                                        >
-                                            Selecciona un producto en stock...
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        className="w-[300px] sm:w-[500px] p-0 pointer-events-auto"
-                                        align="start"
-                                    >
-                                        <Command shouldFilter={false}>
-                                            <CommandInput
-                                                placeholder="Buscar producto..."
-                                                value={searchCombobox}
-                                                onValueChange={setSearchCombobox}
-                                            />
-                                            <CommandList
-                                                className="max-h-[300px] overflow-y-auto"
-                                                onWheel={(e) => {
-                                                    // Prevent Radix dialog from hijacking the wheel scroll
-                                                    e.stopPropagation();
-                                                }}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-1 space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end mt-2">
+                                <div className="flex-1 space-y-2 w-full">
+                                    <label className="text-sm font-medium">Agregar Producto al Carrito</label>
+                                    <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openCombobox}
+                                                className="w-full justify-between"
                                             >
-                                                <CommandEmpty>
-                                                    {isLoadMoreProds ? "Buscando..." : "No se encontró ningún producto libre."}
-                                                </CommandEmpty>
-                                                <CommandGroup>
-                                                    {products
-                                                        .filter(p => p.stock > 0 && !cart.find(c => c.product.id === p.id))
-                                                        .map((p) => (
-                                                            <CommandItem
-                                                                key={p.id}
-                                                                value={p.id}
-                                                                onSelect={(currentValue) => {
-                                                                    handleAddToCart(currentValue)
-                                                                }}
-                                                            >
-                                                                <div className="flex items-center justify-between w-full">
-                                                                    <span>{p.name}</span>
-                                                                    <span className="font-mono text-muted-foreground mr-2 text-xs">Stock: {p.stock}</span>
-                                                                </div>
-                                                            </CommandItem>
-                                                        ))}
-                                                </CommandGroup>
-                                                {/* Intersection trigger */}
-                                                {(hasMoreProds || isLoadMoreProds) && (
-                                                    <div ref={observerTarget} className="flex justify-center p-4">
-                                                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                                                    </div>
-                                                )}
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                                Selecciona un producto en stock...
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="w-[300px] sm:w-[500px] p-0 pointer-events-auto"
+                                            align="start"
+                                        >
+                                            <Command shouldFilter={false}>
+                                                <CommandInput
+                                                    placeholder="Buscar producto..."
+                                                    value={searchCombobox}
+                                                    onValueChange={setSearchCombobox}
+                                                />
+                                                <CommandList
+                                                    className="max-h-[300px] overflow-y-auto"
+                                                    onWheel={(e) => {
+                                                        // Prevent Radix dialog from hijacking the wheel scroll
+                                                        e.stopPropagation();
+                                                    }}
+                                                >
+                                                    <CommandEmpty>
+                                                        {isLoadMoreProds ? "Buscando..." : "No se encontró ningún producto libre."}
+                                                    </CommandEmpty>
+                                                    <CommandGroup>
+                                                        {products
+                                                            .filter(p => p.stock > 0 && !cart.find(c => c.product.id === p.id))
+                                                            .map((p) => (
+                                                                <CommandItem
+                                                                    key={p.id}
+                                                                    value={p.id}
+                                                                    onSelect={(currentValue) => {
+                                                                        handleAddToCart(currentValue)
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-center justify-between w-full">
+                                                                        <span>{p.name}</span>
+                                                                        <span className="font-mono text-muted-foreground mr-2 text-xs">Stock: {p.stock}</span>
+                                                                    </div>
+                                                                </CommandItem>
+                                                            ))}
+                                                    </CommandGroup>
+                                                    {/* Intersection trigger */}
+                                                    {(hasMoreProds || isLoadMoreProds) && (
+                                                        <div ref={observerTarget} className="flex justify-center p-4">
+                                                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                                        </div>
+                                                    )}
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <div className="space-y-2 w-full sm:w-auto">
+                                    <label className="text-sm font-medium">Metodo de pago automático</label>
+                                    <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)}>
+                                        <SelectTrigger className="w-[160px]">
+                                            <SelectValue placeholder="Sin auto-pago" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Sin auto-pago</SelectItem>
+                                            <SelectItem value="usdFisico">USD Físico</SelectItem>
+                                            <SelectItem value="usdTarjeta">USD Tarjeta</SelectItem>
+                                            <SelectItem value="cop">COP</SelectItem>
+                                            <SelectItem value="ves">Bolívares</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
-                            {/* Removed global Divisa select. Moved to individual product level within the table.*/}
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Metodo de pago</label>
-                                <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="Sin auto-pago" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Sin auto-pago</SelectItem>
-                                        <SelectItem value="usdFisico">USD Físico</SelectItem>
-                                        <SelectItem value="usdTarjeta">USD Tarjeta</SelectItem>
-                                        <SelectItem value="cop">COP</SelectItem>
-                                        <SelectItem value="ves">Bolívares</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
 
-                        <div className="border rounded-md mt-4 flex-1 overflow-y-auto min-h-[200px]">
-                            <Table>
-                                <TableHeader className="sticky top-0 bg-background z-10">
-                                    <TableRow>
-                                        <TableHead>Producto</TableHead>
-                                        <TableHead className="w-[80px]">Cant.</TableHead>
-                                        <TableHead className="w-[180px]">Total Adeudado</TableHead>
-                                        <TableHead>Pagos del Cliente</TableHead>
-                                        <TableHead className="w-[50px] text-right"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
+                            {isMobile ? (
+                                <div className="flex flex-col gap-3 shrink-0 flex-none overflow-y-auto overflow-x-hidden max-h-[50vh] pr-1">
                                     {cart.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                                El carrito está vacío.
-                                            </TableCell>
-                                        </TableRow>
+                                        <div className="h-24 flex items-center justify-center text-muted-foreground border rounded-md">
+                                            El carrito está vacío.
+                                        </div>
                                     ) : (
                                         cart.map((item) => {
                                             const p = item.product;
                                             const unitVes = getDynamicVes(p, item.vesBaseCurrency);
                                             return (
-                                                <TableRow key={p.id}>
-                                                    <TableCell className="font-medium align-top py-4">{p.name}</TableCell>
-                                                    <TableCell className="align-top py-4">
-                                                        <Input
-                                                            type="number"
-                                                            value={item.quantity}
-                                                            onChange={(e) => updateCartQuantity(p.id, e.target.value)}
-                                                            min="1"
-                                                            max={p.stock}
-                                                            className="w-16 h-8"
-                                                        />
-                                                        <div className="text-[10px] text-muted-foreground mt-1 text-center">Máx: {p.stock}</div>
-                                                    </TableCell>
-                                                    <TableCell className="align-top py-4 ">
-                                                        <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
-                                                            <div className="flex flex-col gap-1 mb-4">
-                                                                <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
-                                                                    <SelectTrigger className="h-7 w-full text-xs px-2 py-0">
-                                                                        <SelectValue placeholder="Base..." />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
-                                                                        <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </div>
-                                                            <div className="font-medium text-foreground">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)</div>
-                                                            <div className="text-muted-foreground">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)</div>
-                                                            <div className="text-muted-foreground">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP</div>
-                                                            <div className="text-muted-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="align-top py-2">
-                                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="w-[50px] justify-center">USD F</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="w-[50px] justify-center">USD T</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="w-[50px] justify-center">COP</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="w-[50px] justify-center">VES</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="align-top py-4 text-right">
-                                                        <Button variant="ghost" size="icon" className="text-destructive h-8" onClick={() => removeFromCart(p.id)}>
+                                                <div key={p.id} className="border rounded-lg p-3 space-y-3 bg-card relative shadow-sm">
+                                                    {/* Header: Name and Delete Btn */}
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <span className="font-semibold text-sm leading-tight pr-6">{p.name}</span>
+                                                        <Button variant="ghost" size="icon" className="text-destructive h-auto w-auto p-1 absolute top-2 right-2 shrink-0 bg-destructive/10 hover:bg-destructive/20" onClick={() => removeFromCart(p.id)}>
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
-                                                    </TableCell>
-                                                </TableRow>
+                                                    </div>
+
+                                                    {/* Quantity and Base Currency */}
+                                                    <div className="flex items-end justify-between gap-4">
+                                                        <div className="space-y-1">
+                                                            <label className="text-[10px] text-muted-foreground uppercase font-semibold">Cant. (Máx: {p.stock})</label>
+                                                            <Input
+                                                                type="number"
+                                                                value={item.quantity}
+                                                                onChange={(e) => updateCartQuantity(p.id, e.target.value)}
+                                                                min="1"
+                                                                max={p.stock}
+                                                                className="w-20 h-8 font-medium"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1 flex-1">
+                                                            <label className="text-[10px] text-muted-foreground uppercase font-semibold">Moneda Base</label>
+                                                            <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
+                                                                <SelectTrigger className="h-8 w-full text-xs">
+                                                                    <SelectValue placeholder="Base..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
+                                                                    <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Calculated Totals (Adeudado) */}
+                                                    <div className="bg-muted/30 p-2 rounded-md grid grid-cols-2 gap-x-2 gap-y-1 text-xs border">
+                                                        <div className="text-muted-foreground flex justify-between">USD(T): <span className="text-foreground font-medium">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)}</span></div>
+                                                        <div className="text-muted-foreground flex justify-between">USD(F): <span className="text-foreground font-medium">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)}</span></div>
+                                                        <div className="text-muted-foreground flex justify-between">COP: <span className="text-foreground font-medium">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')}</span></div>
+                                                        <div className="text-muted-foreground flex justify-between">VES: <span className="text-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></div>
+                                                    </div>
+
+                                                    {/* Customer Payments */}
+                                                    <div className="space-y-2 pt-2 border-t mt-1">
+                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Pagos ingresados para este item</label>
+                                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            <div className="space-y-1">
+                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">USD Físico</Badge>
+                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">USD Tarjeta</Badge>
+                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">COP</Badge>
+                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0.00" />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">VES</Badge>
+                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             )
                                         })
                                     )}
-                                </TableBody>
-                            </Table>
-                        </div>
-
-                        <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
-                            <div className="space-y-4 flex-1">
-                                <h4 className="font-semibold mb-2">Estado General de Venta</h4>
-                                <div className="space-y-2 pt-2">
-                                    <label className="text-sm font-medium">Condición del Cobro:</label>
-                                    <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Estado..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="pagado">Pagado Totalidad</SelectItem>
-                                            <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
-                                            <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
-                                        </SelectContent>
-                                    </Select>
                                 </div>
-                                <div className="space-y-2 pt-2 border-t mt-4">
-                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-xs pr-2">Billete/Monto USD Recibido:</label>
-                                            <Input
-                                                type="number"
-                                                step="any"
-                                                placeholder="Ej. 10.00"
-                                                value={receivedUsdForChange}
-                                                onChange={(e) => setReceivedUsdForChange(e.target.value)}
-                                                className="w-[180px]"
-                                            />
-                                        </div>
-                                        {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
+                            ) : (
+                                <div className="border rounded-md shrink-0 flex-none sm:flex-1 overflow-auto max-h-[30vh] sm:min-h-[200px] sm:max-h-[35vh]">
+                                    <Table>
+                                        <TableHeader className="sticky top-0 bg-background z-10">
+                                            <TableRow>
+                                                <TableHead>Producto</TableHead>
+                                                <TableHead className="w-[80px]">Cant.</TableHead>
+                                                <TableHead className="w-[180px]">Total Adeudado</TableHead>
+                                                <TableHead>Pagos del Cliente</TableHead>
+                                                <TableHead className="w-[50px] text-right"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {cart.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                                        El carrito está vacío.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                cart.map((item) => {
+                                                    const p = item.product;
+                                                    const unitVes = getDynamicVes(p, item.vesBaseCurrency);
+                                                    return (
+                                                        <TableRow key={p.id}>
+                                                            <TableCell className="font-medium align-top py-4">{p.name}</TableCell>
+                                                            <TableCell className="align-top py-4">
+                                                                <Input
+                                                                    type="number"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => updateCartQuantity(p.id, e.target.value)}
+                                                                    min="1"
+                                                                    max={p.stock}
+                                                                    className="w-16 h-8"
+                                                                />
+                                                                <div className="text-[10px] text-muted-foreground mt-1 text-center">Máx: {p.stock}</div>
+                                                            </TableCell>
+                                                            <TableCell className="align-top py-4 ">
+                                                                <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
+                                                                    <div className="flex flex-col gap-1 mb-4">
+                                                                        <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
+                                                                            <SelectTrigger className="h-7 w-full text-xs px-2 py-0">
+                                                                                <SelectValue placeholder="Base..." />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
+                                                                                <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </div>
+                                                                    <div className="font-medium text-foreground">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)</div>
+                                                                    <div className="text-muted-foreground">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)</div>
+                                                                    <div className="text-muted-foreground">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP</div>
+                                                                    <div className="text-muted-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="align-top py-2">
+                                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Badge variant="outline" className="w-[50px] justify-center">USD F</Badge>
+                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Badge variant="outline" className="w-[50px] justify-center">USD T</Badge>
+                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Badge variant="outline" className="w-[50px] justify-center">COP</Badge>
+                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0.00" />
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Badge variant="outline" className="w-[50px] justify-center">VES</Badge>
+                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="align-top py-4 text-right">
+                                                                <Button variant="ghost" size="icon" className="text-destructive h-8" onClick={() => removeFromCart(p.id)}>
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )
+                                                })
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+
+                            <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
+                                <div className="space-y-4 flex-1">
+                                    <h4 className="font-semibold mb-2">Estado General de Venta</h4>
+                                    <div className="space-y-2 pt-2">
+                                        <label className="text-sm font-medium">Condición del Cobro:</label>
+                                        <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
+                                            <SelectTrigger className="w-[180px]">
+                                                <SelectValue placeholder="Estado..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="pagado">Pagado Totalidad</SelectItem>
+                                                <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
+                                                <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 pt-2 border-t mt-4">
+                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                             <div className="space-y-1">
-                                                <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
-                                                <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
-                                                    {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
-                                                </div>
+                                                <label className="text-xs pr-2">Billete/Monto USD Recibido:</label>
+                                                <Input
+                                                    type="number"
+                                                    step="any"
+                                                    placeholder="Ej. 10.00"
+                                                    value={receivedUsdForChange}
+                                                    onChange={(e) => setReceivedUsdForChange(e.target.value)}
+                                                    className="w-[180px]"
+                                                />
                                             </div>
-                                        )}
+                                            {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
+                                                    <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
+                                                        {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="min-w-[250px] border-l pl-8 space-y-2 self-end md:self-stretch flex flex-col justify-center">
+                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 border-b pb-1">Recibido (Total Depositado)</h4>
+                                    <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdFisico" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                        ${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span>
+                                    </div>
+                                    <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdTarjeta" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                        ${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span>
+                                    </div>
+                                    <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "cop" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                        ${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span>
+                                    </div>
+                                    <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "ves" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
+                                        Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="min-w-[250px] border-l pl-8 space-y-2 self-end md:self-stretch flex flex-col justify-center">
-                                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 border-b pb-1">Recibido (Total Depositado)</h4>
-                                <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdFisico" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
-                                    ${receivedTotals.usdFisico.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Físico)</span>
+                            {hasItemsWithoutPrice && saleStatus !== "fiado" && cart.length > 0 && (
+                                <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                    Hay productos en el carrito sin precio asignado (con valor 0). Para poder procesar esta venta, el estado de la venta debe ser "Fiado".
                                 </div>
-                                <div className={cn("text-2xl font-bold tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "usdTarjeta" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
-                                    ${receivedTotals.usdTarjeta.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USD (Tarjeta)</span>
+                            )}
+
+                            {checkoutError && (
+                                <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                    {checkoutError}
                                 </div>
-                                <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "cop" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
-                                    ${receivedTotals.cop.toLocaleString('es-CO')} <span className="text-sm font-normal text-muted-foreground">COP</span>
-                                </div>
-                                <div className={cn("text-xl font-medium tracking-tight text-green-600 rounded-md transition-all duration-200", defaultCurrency === "ves" && "bg-green-100 dark:bg-green-900/30 p-2 shadow-sm border border-green-200 dark:border-green-800")}>
-                                    Bs. {receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </div>
-                            </div>
+                            )}
                         </div>
-
-                        {hasItemsWithoutPrice && saleStatus !== "fiado" && cart.length > 0 && (
-                            <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
-                                Hay productos en el carrito sin precio asignado (con valor 0). Para poder procesar esta venta, el estado de la venta debe ser "Fiado".
-                            </div>
-                        )}
-
-                        {checkoutError && (
-                            <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
-                                {checkoutError}
-                            </div>
-                        )}
-
-                        <DialogFooter className="mt-4">
+                        <DialogFooter className="mt-4 shrink-0">
                             <Button variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancelar</Button>
-                            <Button onClick={handleCheckout} disabled={!canCheckout}>
+                            <Button onClick={handleCheckout} disabled={!canCheckout} className="w-full sm:w-auto">
                                 {isSubmitting ? "Procesando..." : "Confirmar Venta"}
                             </Button>
                         </DialogFooter>
@@ -734,62 +821,108 @@ export function SalesTable() {
                 </Dialog>
             </div>
 
-            <div className="border rounded-md">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Total (USD F)</TableHead>
-                            <TableHead>Total (USD T)</TableHead>
-                            <TableHead>Total (COP)</TableHead>
-                            <TableHead>Total (VES)</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead className="w-[100px] text-right">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
+            {/* Mobile Card View */}
+            {isMobile ? (
+                <div className="space-y-3">
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                            <Skeleton key={i} className="h-28 w-full rounded-lg" />
+                        ))
+                    ) : sales.length === 0 ? (
+                        <div className="h-24 flex items-center justify-center text-muted-foreground">
+                            {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
+                        </div>
+                    ) : (
+                        sales.map((sale) => (
+                            <div key={sale.id} className="border rounded-lg p-4 space-y-3 bg-card" onClick={() => openDetails(sale)}>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">
+                                        {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    <Badge variant={sale.status === 'pagado' ? 'default' : sale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize">
+                                        {sale.status}
+                                    </Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {sale.receivedTotals.usdFisico > 0 && (
+                                        <Badge variant="outline" className="text-xs">${sale.receivedTotals.usdFisico.toFixed(2)} USD F</Badge>
+                                    )}
+                                    {sale.receivedTotals.usdTarjeta > 0 && (
+                                        <Badge variant="outline" className="text-xs">${sale.receivedTotals.usdTarjeta.toFixed(2)} USD T</Badge>
+                                    )}
+                                    {sale.receivedTotals.cop > 0 && (
+                                        <Badge variant="outline" className="text-xs">${sale.receivedTotals.cop.toLocaleString('es-CO')} COP</Badge>
+                                    )}
+                                    {sale.receivedTotals.ves > 0 && (
+                                        <Badge variant="outline" className="text-xs">Bs. {sale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</Badge>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ) : (
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center">
-                                    Cargando...
-                                </TableCell>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Total (USD F)</TableHead>
+                                <TableHead>Total (USD T)</TableHead>
+                                <TableHead>Total (COP)</TableHead>
+                                <TableHead>Total (VES)</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead className="w-[100px] text-right">Acciones</TableHead>
                             </TableRow>
-                        ) : sales.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                                    {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            sales.map((sale) => {
-                                return (
-                                    <TableRow key={sale.id}>
-                                        <TableCell className="font-medium">
-                                            {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </TableCell>
-                                        <TableCell>{sale.receivedTotals.usdFisico > 0 ? `$${sale.receivedTotals.usdFisico.toFixed(2)}` : '-'}</TableCell>
-                                        <TableCell>{sale.receivedTotals.usdTarjeta > 0 ? `$${sale.receivedTotals.usdTarjeta.toFixed(2)}` : '-'}</TableCell>
-                                        <TableCell>{sale.receivedTotals.cop > 0 ? `$${sale.receivedTotals.cop.toLocaleString('es-CO')}` : '-'}</TableCell>
-                                        <TableCell>{sale.receivedTotals.ves > 0 ? `Bs. ${sale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col gap-1 items-start">
-                                                <Badge variant={sale.status === 'pagado' ? 'default' : sale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize">
-                                                    {sale.status}
-                                                </Badge>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => openDetails(sale)}>
-                                                <Eye className="w-4 h-4" />
-                                            </Button>
-                                        </TableCell>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                Array.from({ length: 6 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        {Array.from({ length: 7 }).map((_, j) => (
+                                            <TableCell key={j}>
+                                                <Skeleton className="h-4 w-full" />
+                                            </TableCell>
+                                        ))}
                                     </TableRow>
-                                )
-                            })
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                                ))
+                            ) : sales.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                                        {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                sales.map((sale) => {
+                                    return (
+                                        <TableRow key={sale.id}>
+                                            <TableCell className="font-medium">
+                                                {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </TableCell>
+                                            <TableCell>{sale.receivedTotals.usdFisico > 0 ? `$${sale.receivedTotals.usdFisico.toFixed(2)}` : '-'}</TableCell>
+                                            <TableCell>{sale.receivedTotals.usdTarjeta > 0 ? `$${sale.receivedTotals.usdTarjeta.toFixed(2)}` : '-'}</TableCell>
+                                            <TableCell>{sale.receivedTotals.cop > 0 ? `$${sale.receivedTotals.cop.toLocaleString('es-CO')}` : '-'}</TableCell>
+                                            <TableCell>{sale.receivedTotals.ves > 0 ? `Bs. ${sale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    <Badge variant={sale.status === 'pagado' ? 'default' : sale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize">
+                                                        {sale.status}
+                                                    </Badge>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" onClick={() => openDetails(sale)}>
+                                                    <Eye className="w-4 h-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
                 <div className="flex items-center space-x-2 text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
