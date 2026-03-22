@@ -605,7 +605,7 @@ export function SalesTable() {
                                                         <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
                                                             <div className="flex flex-col gap-1 mb-4">
                                                                 <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
-                                                                    <SelectTrigger className="h-7 w-full text-xs px-2 py-0 border-muted">
+                                                                    <SelectTrigger className="h-7 w-full text-xs px-2 py-0">
                                                                         <SelectValue placeholder="Base..." />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
