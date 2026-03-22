@@ -94,6 +94,8 @@ export function SalesTable() {
     // View Details states
     const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
     const [selectedSale, setSelectedSale] = React.useState<Sale | null>(null)
+    const [detailProductNames, setDetailProductNames] = React.useState<Record<string, string>>({})
+    const [isLoadingDetails, setIsLoadingDetails] = React.useState(false)
 
     const getDynamicVes = React.useCallback((p: Product) => {
         if (!p.price) return 0;
@@ -381,9 +383,45 @@ export function SalesTable() {
         }
     }
 
-    const openDetails = (sale: Sale) => {
+    const openDetails = async (sale: Sale) => {
         setSelectedSale(sale);
         setIsDetailsOpen(true);
+        setIsLoadingDetails(true);
+        setDetailProductNames({});
+
+        try {
+            // Fetch product names for all items in the sale
+            const productIds = sale.items.map(item => item.productId);
+            const uniqueIds = [...new Set(productIds)];
+            const nameMap: Record<string, string> = {};
+
+            // Try to resolve names from already loaded products first
+            const missingIds: string[] = [];
+            for (const id of uniqueIds) {
+                const found = products.find(p => p.id === id);
+                if (found) {
+                    nameMap[id] = found.name;
+                } else {
+                    missingIds.push(id);
+                }
+            }
+
+            // Fetch missing products from the API
+            if (missingIds.length > 0) {
+                const res = await api.getProducts({ limit: 50 });
+                for (const p of res.data) {
+                    if (missingIds.includes(p.id)) {
+                        nameMap[p.id] = p.name;
+                    }
+                }
+            }
+
+            setDetailProductNames(nameMap);
+        } catch (error) {
+            console.error("Error loading product details", error);
+        } finally {
+            setIsLoadingDetails(false);
+        }
     }
 
     // Validation for checkout
@@ -818,11 +856,15 @@ export function SalesTable() {
                                     </TableHeader>
                                     <TableBody>
                                         {selectedSale.items.map((item, idx) => {
-                                            const pProd = products.find(p => p.id === item.productId);
-                                            const name = pProd ? pProd.name : "Producto"; // fallback since we map
+                                            const name = detailProductNames[item.productId] || "Producto";
                                             return (
                                                 <TableRow key={idx}>
-                                                    <TableCell className="font-medium align-top py-3">{name}</TableCell>
+                                                    <TableCell className="font-medium align-top py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {isLoadingDetails && !detailProductNames[item.productId] && <Loader2 className="w-3 h-3 animate-spin" />}
+                                                            {name}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell className="align-top py-3">{item.quantity}</TableCell>
                                                     <TableCell className="align-top py-3 text-sm">
                                                         <div className="space-y-1">
