@@ -48,7 +48,8 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Edit, Plus, Trash2, ArrowUpDown, Settings2 } from "lucide-react"
+import { Edit, Plus, Trash2, ArrowUpDown, Settings2, RefreshCw, Loader2 } from "lucide-react"
+import { getBcvRate } from "@/app/actions/bcv"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -72,6 +73,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
     const [rateCop, setRateCop] = React.useState("")
     const [rateBcv, setRateBcv] = React.useState("")
     const [rateCopUsd, setRateCopUsd] = React.useState("")
+    const [isFetchingBcv, setIsFetchingBcv] = React.useState(false)
 
     // Form states — product fields
     const [name, setName] = React.useState("")
@@ -358,6 +360,20 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
         await loadData()
         setIsSubmitting(false)
         setIsRatesOpen(false)
+    }
+
+    const fetchBcvRate = async () => {
+        setIsFetchingBcv(true);
+        try {
+            const rate = await getBcvRate();
+            if (rate !== null) {
+                setRateBcv(rate.toString());
+            }
+        } catch (error) {
+            console.error("Failed to fetch BCV rate", error);
+        } finally {
+            setIsFetchingBcv(false);
+        }
     }
 
     const openEdit = (prod: Product) => {
@@ -997,15 +1013,28 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                     <form onSubmit={handleSaveRates} className="space-y-4">
                         <div className="grid grid-cols-4 items-center gap-4">
                             <label className="text-right text-sm font-medium">Tasa BCV</label>
-                            <Input
-                                className="col-span-3"
-                                type="number"
-                                step="0.01"
-                                value={rateBcv}
-                                onChange={(e) => setRateBcv(e.target.value)}
-                                min="0"
-                                required
-                            />
+                            <div className="col-span-3 flex gap-2">
+                                <Input
+                                    className="flex-1"
+                                    type="number"
+                                    step="any"
+                                    value={rateBcv}
+                                    onChange={(e) => setRateBcv(e.target.value)}
+                                    min="0"
+                                    required
+                                    disabled={isSubmitting || isFetchingBcv}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    title="Tasa oficial (BCV)"
+                                    onClick={fetchBcvRate}
+                                    disabled={isSubmitting || isFetchingBcv}
+                                >
+                                    {isFetchingBcv ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                </Button>
+                            </div>
                             <div className="col-span-4 text-xs text-muted-foreground ml-16">
                                 Bolívares por $1 USD. Ej: 455.25 significa que: <br /> $1 USD = 455.25 Bs.
                             </div>
