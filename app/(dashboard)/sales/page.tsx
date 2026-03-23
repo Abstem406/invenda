@@ -10,7 +10,7 @@ export default function SalesPage() {
                 </p>
             </div>
 
-            <div className="max-w-6xl">
+            <div className="w-full">
                 <SalesTable />
             </div>
         </div>

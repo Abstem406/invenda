@@ -4,8 +4,18 @@ import type { NextRequest } from "next/server";
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login"];
 
-export function proxy(request: NextRequest) {
-    const { pathname } = request.nextUrl;
+export function middleware(request: NextRequest) {
+    const { pathname, searchParams } = request.nextUrl;
+
+    // Check if there's a directive to clear cookies
+    if (searchParams.get("session_expired") === "true") {
+        const loginUrl = new URL("/login", request.url);
+        const response = NextResponse.redirect(loginUrl);
+        response.cookies.delete("access_token");
+        response.cookies.delete("refresh_token");
+        return response;
+    }
+
     const accessToken = request.cookies.get("access_token");
     const refreshToken = request.cookies.get("refresh_token");
 

@@ -161,12 +161,15 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
         // Refresh failed — clear cookies via logout endpoint and redirect
         if (typeof window !== "undefined") {
             try {
+                // Esto fallará en el navegador por SameSite si son dominios distintos, 
+                // pero enviamos la señal al backend igualmente.
                 await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", credentials: "include" });
             } catch (e) {
                 // Ignore logout errors during expiration
             }
             if (window.location.pathname !== "/login") {
-                window.location.href = "/login";
+                // Agregamos un parametro para que el middleware de NextJS borre las cookies localmente
+                window.location.href = "/login?session_expired=true";
             }
         }
         throw new Error("Session expired");
