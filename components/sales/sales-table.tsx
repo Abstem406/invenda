@@ -23,6 +23,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion"
+import {
     Pagination,
     PaginationContent,
     PaginationItem,
@@ -37,7 +43,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react"
+import { Plus, Minus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -60,6 +66,7 @@ interface CartItem {
     product: Product;
     quantity: number;
     vesBaseCurrency: "usd" | "cop";
+    autoPaymentMethod: "none" | "usdFisico" | "usdTarjeta" | "cop" | "ves";
     payments: {
         usdTarjeta: number;
         usdFisico: number;
@@ -173,7 +180,7 @@ export function SalesTable() {
                 else if (defaultCurrency === "cop") payments.cop = (p.cop || 0) * item.quantity;
                 else if (defaultCurrency === "ves") payments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * item.quantity;
             }
-            return { ...item, payments };
+            return { ...item, autoPaymentMethod: defaultCurrency, payments };
         }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [defaultCurrency])
@@ -306,6 +313,7 @@ export function SalesTable() {
             product: prod,
             quantity: 1,
             vesBaseCurrency: initialVesBaseCurrency,
+            autoPaymentMethod: defaultCurrency,
             payments
         }]);
         setOpenCombobox(false);
@@ -322,6 +330,23 @@ export function SalesTable() {
         }))
     }
 
+    const updateItemAutoPaymentMethod = (productId: string, val: "none" | "usdFisico" | "usdTarjeta" | "cop" | "ves") => {
+        setCart(prev => prev.map(item => {
+            if (item.product.id === productId) {
+                const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
+                if (val !== "none") {
+                    const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
+                    if (val === "usdFisico") payments.usdFisico = (p.usdFisico || 0) * item.quantity;
+                    else if (val === "usdTarjeta") payments.usdTarjeta = (p.usdTarjeta || 0) * item.quantity;
+                    else if (val === "cop") payments.cop = (p.cop || 0) * item.quantity;
+                    else if (val === "ves") payments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * item.quantity;
+                }
+                return { ...item, autoPaymentMethod: val, payments };
+            }
+            return item;
+        }));
+    }
+
     const updateCartQuantity = (productId: string, newQuantity: string) => {
         const qty = parseInt(newQuantity, 10);
         if (isNaN(qty) || qty < 1) return;
@@ -329,14 +354,14 @@ export function SalesTable() {
         setCart(prev => prev.map(item => {
             if (item.product.id === productId) {
                 const safeQty = Math.min(qty, item.product.stock);
-                // Recalculate payments based on the default currency
+                // Recalculate payments based on the item's local auto payment method
                 const updatedPayments = { ...item.payments };
-                if (defaultCurrency && defaultCurrency !== "none") {
+                if (item.autoPaymentMethod && item.autoPaymentMethod !== "none") {
                     const p = item.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
-                    if (defaultCurrency === "usdFisico") updatedPayments.usdFisico = (p.usdFisico || 0) * safeQty;
-                    else if (defaultCurrency === "usdTarjeta") updatedPayments.usdTarjeta = (p.usdTarjeta || 0) * safeQty;
-                    else if (defaultCurrency === "cop") updatedPayments.cop = (p.cop || 0) * safeQty;
-                    else if (defaultCurrency === "ves") updatedPayments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * safeQty;
+                    if (item.autoPaymentMethod === "usdFisico") updatedPayments.usdFisico = (p.usdFisico || 0) * safeQty;
+                    else if (item.autoPaymentMethod === "usdTarjeta") updatedPayments.usdTarjeta = (p.usdTarjeta || 0) * safeQty;
+                    else if (item.autoPaymentMethod === "cop") updatedPayments.cop = (p.cop || 0) * safeQty;
+                    else if (item.autoPaymentMethod === "ves") updatedPayments.ves = getDynamicVes(item.product, item.vesBaseCurrency) * safeQty;
                 }
                 return { ...item, quantity: safeQty, payments: updatedPayments };
             }
@@ -568,177 +593,185 @@ export function SalesTable() {
                                 </div>
                             </div>
 
-                            {isMobile ? (
-                                <div className="flex flex-col gap-3 shrink-0 flex-none overflow-y-auto overflow-x-hidden max-h-[50vh] pr-1">
-                                    {cart.length === 0 ? (
-                                        <div className="h-24 flex items-center justify-center text-muted-foreground border rounded-md">
-                                            El carrito está vacío.
-                                        </div>
-                                    ) : (
-                                        cart.map((item) => {
+                            <div className="flex flex-col gap-3 w-full pb-2">
+                                {cart.length === 0 ? (
+                                    <div className="h-24 flex items-center justify-center text-muted-foreground border border-dashed rounded-md">
+                                        El carrito está vacío.
+                                    </div>
+                                ) : (
+                                    <Accordion type="multiple" className="w-full space-y-2">
+                                        {cart.map((item) => {
                                             const p = item.product;
                                             const unitVes = getDynamicVes(p, item.vesBaseCurrency);
                                             return (
-                                                <div key={p.id} className="border rounded-lg p-3 space-y-3 bg-card relative shadow-sm">
-                                                    {/* Header: Name and Delete Btn */}
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <span className="font-semibold text-sm leading-tight pr-6">{p.name}</span>
-                                                        <Button variant="ghost" size="icon" className="text-destructive h-auto w-auto p-1 absolute top-2 right-2 shrink-0 bg-destructive/10 hover:bg-destructive/20" onClick={() => removeFromCart(p.id)}>
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
+                                                <AccordionItem key={p.id} value={p.id} className="border rounded-lg bg-card px-3 shadow-sm data-[state=open]:pb-3 data-[state=closed]:py-1">
+                                                    <AccordionTrigger className="hover:no-underline py-2 pr-2">
+                                                        <div className="w-full text-left">
+                                                            {/* Mobile Version Wrapper */}
+                                                            <div className="flex sm:hidden justify-between items-start w-full gap-2 pr-1">
+                                                                <div className="flex flex-col gap-3 flex-1 min-w-0 mt-1">
+                                                                    <span className="font-semibold text-sm leading-tight truncate pr-2" title={p.name}>{p.name}</span>
+                                                                    <div className="flex items-center z-10 shrink-0 w-max" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                                                        <div className="flex items-center">
+                                                                            <Button asChild variant="outline" size="icon" className="h-7 w-7 rounded-r-none border-r-0 cursor-pointer">
+                                                                                <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateCartQuantity(p.id, String(Math.max(1, item.quantity - 1))) }}>
+                                                                                    <Minus className="h-3 w-3" />
+                                                                                </div>
+                                                                            </Button>
+                                                                            <Input type="number" value={item.quantity} onChange={(e) => updateCartQuantity(p.id, e.target.value)} min="1" max={p.stock} className="w-12 h-7 text-xs font-medium text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                                            <Button asChild variant="outline" size="icon" className="h-7 w-7 rounded-l-none border-l-0 cursor-pointer">
+                                                                                <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateCartQuantity(p.id, String(Math.min(p.stock, item.quantity + 1))) }}>
+                                                                                    <Plus className="h-3 w-3" />
+                                                                                </div>
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end gap-2 shrink-0 mt-1">
+                                                                    <span className="font-bold text-sm text-green-600 truncate max-w-[150px] text-right">
+                                                                        {item.autoPaymentMethod === "usdFisico" && `$${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)`}
+                                                                        {item.autoPaymentMethod === "usdTarjeta" && `$${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)`}
+                                                                        {item.autoPaymentMethod === "cop" && `$${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP`}
+                                                                        {item.autoPaymentMethod === "ves" && `Bs. ${(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}
+                                                                        {(!item.autoPaymentMethod || item.autoPaymentMethod === "none") && `Bs. ${(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}
+                                                                    </span>
+                                                                    <div className="z-10 shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                                                        <Button asChild variant="ghost" size="icon" className="text-destructive h-8 w-8 bg-destructive/10 hover:bg-destructive/20 rounded-md cursor-pointer" title="Eliminar producto">
+                                                                            <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFromCart(p.id); }}>
+                                                                                <Trash2 className="w-4 h-4" />
+                                                                            </div>
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
 
-                                                    {/* Quantity and Base Currency */}
-                                                    <div className="flex items-end justify-between gap-4">
-                                                        <div className="space-y-1">
-                                                            <label className="text-[10px] text-muted-foreground uppercase font-semibold">Cant. (Máx: {p.stock})</label>
-                                                            <Input
-                                                                type="number"
-                                                                value={item.quantity}
-                                                                onChange={(e) => updateCartQuantity(p.id, e.target.value)}
-                                                                min="1"
-                                                                max={p.stock}
-                                                                className="w-20 h-8 font-medium"
-                                                            />
+                                                            {/* Desktop Version Wrapper */}
+                                                            <div className="hidden sm:flex items-center justify-between w-full gap-4 pr-2">
+                                                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                                    <span className="font-semibold text-sm leading-tight w-[240px] shrink-0 truncate" title={p.name}>{p.name}</span>
+                                                                    <div className="flex items-center z-10 shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold mr-1.5">Cant:</label>
+                                                                        <div className="flex items-center">
+                                                                            <Button asChild variant="outline" size="icon" className="h-7 w-7 rounded-r-none border-r-0 cursor-pointer">
+                                                                                <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateCartQuantity(p.id, String(Math.max(1, item.quantity - 1))) }}>
+                                                                                    <Minus className="h-3 w-3" />
+                                                                                </div>
+                                                                            </Button>
+                                                                            <Input type="number" value={item.quantity} onChange={(e) => updateCartQuantity(p.id, e.target.value)} min="1" max={p.stock} className="w-12 h-7 text-xs font-medium text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                                            <Button asChild variant="outline" size="icon" className="h-7 w-7 rounded-l-none border-l-0 cursor-pointer">
+                                                                                <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateCartQuantity(p.id, String(Math.min(p.stock, item.quantity + 1))) }}>
+                                                                                    <Plus className="h-3 w-3" />
+                                                                                </div>
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="ml-4 font-bold text-sm text-green-600 truncate flex-1 min-w-0 pl-2 text-left">
+                                                                        {item.autoPaymentMethod === "usdFisico" && `$${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)`}
+                                                                        {item.autoPaymentMethod === "usdTarjeta" && `$${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)`}
+                                                                        {item.autoPaymentMethod === "cop" && `$${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP`}
+                                                                        {item.autoPaymentMethod === "ves" && `Bs. ${(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}
+                                                                        {(!item.autoPaymentMethod || item.autoPaymentMethod === "none") && `Bs. ${(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center shrink-0">
+                                                                    <div className="z-10 ml-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                                                        <Button asChild variant="ghost" size="icon" className="text-destructive h-9 w-9 bg-destructive/10 hover:bg-destructive/20 rounded-md cursor-pointer" title="Eliminar producto">
+                                                                            <div role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFromCart(p.id); }}>
+                                                                                <Trash2 className="w-4 h-4" />
+                                                                            </div>
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div className="space-y-1 flex-1">
-                                                            <label className="text-[10px] text-muted-foreground uppercase font-semibold">Moneda Base</label>
-                                                            <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
-                                                                <SelectTrigger className="h-8 w-full text-xs">
-                                                                    <SelectValue placeholder="Base..." />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
-                                                                    <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                    </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent className="pt-2 pb-0">
+                                                        <div className="space-y-4">
+                                                            {/* Row 1: Configurations */}
+                                                            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 w-full">
+                                                                <div className="space-y-1 shrink-0 w-full sm:w-auto flex-1">
+                                                                    <label className="text-[10px] text-muted-foreground uppercase font-semibold">Moneda Base</label>
+                                                                    <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
+                                                                        <SelectTrigger className="h-8 w-full text-xs">
+                                                                            <SelectValue placeholder="Base..." />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
+                                                                            <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                                <div className="space-y-1 flex-1 w-full flex-[2]">
+                                                                    <label className="text-[10px] text-muted-foreground uppercase font-semibold text-primary/80">Método de Pago (Item)</label>
+                                                                    <Select value={item.autoPaymentMethod} onValueChange={(val: any) => updateItemAutoPaymentMethod(p.id, val)}>
+                                                                        <SelectTrigger className="h-8 w-full text-xs border-primary/50 focus:ring-primary/30">
+                                                                            <SelectValue placeholder="Manual / Variado" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="none">Manual / Variado</SelectItem>
+                                                                            <SelectItem value="usdFisico">USD Físico</SelectItem>
+                                                                            <SelectItem value="usdTarjeta">USD Tarjeta</SelectItem>
+                                                                            <SelectItem value="cop">COP</SelectItem>
+                                                                            <SelectItem value="ves">Bolívares</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                            </div>
 
-                                                    {/* Calculated Totals (Adeudado) */}
-                                                    <div className="bg-muted/30 p-2 rounded-md grid grid-cols-2 gap-x-2 gap-y-1 text-xs border">
-                                                        <div className="text-muted-foreground flex justify-between">USD(T): <span className="text-foreground font-medium">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)}</span></div>
-                                                        <div className="text-muted-foreground flex justify-between">USD(F): <span className="text-foreground font-medium">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)}</span></div>
-                                                        <div className="text-muted-foreground flex justify-between">COP: <span className="text-foreground font-medium">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')}</span></div>
-                                                        <div className="text-muted-foreground flex justify-between">VES: <span className="text-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></div>
-                                                    </div>
+                                                            {/* Calculated Totals (Debt) */}
+                                                            <div className="bg-muted/30 p-2 rounded-md grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-xs border">
+                                                                <div className="text-muted-foreground flex flex-col">USD(T)<span className="text-foreground font-medium">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)}</span></div>
+                                                                <div className="text-muted-foreground flex flex-col">USD(F)<span className="text-foreground font-medium">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)}</span></div>
+                                                                <div className="text-muted-foreground flex flex-col">COP<span className="text-foreground font-medium">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')}</span></div>
+                                                                <div className="text-muted-foreground flex flex-col">VES<span className="text-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></div>
+                                                            </div>
 
-                                                    {/* Customer Payments */}
-                                                    <div className="space-y-2 pt-2 border-t mt-1">
-                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Pagos ingresados para este item</label>
-                                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                                            <div className="space-y-1">
-                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">USD Físico</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">USD Tarjeta</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">COP</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0.00" />
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <Badge variant="outline" className="w-full justify-center text-[10px] py-0">VES</Badge>
-                                                                <Input type="number" step="0.01" className="h-7 w-full text-xs" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
+                                                            {/* Customer Payments */}
+                                                            <div className="space-y-2 pt-2 border-t mt-2">
+                                                                <label className="text-[10px] text-muted-foreground uppercase font-semibold">Pagos ingresados para este item</label>
+                                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs w-full">
+                                                                    <div className="space-y-1">
+                                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">USD Físico</label>
+                                                                        <div className="flex items-center">
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String(Math.max(0, (item.payments.usdFisico || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String((item.payments.usdFisico || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">USD Tarjeta</label>
+                                                                        <div className="flex items-center">
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String(Math.max(0, (item.payments.usdTarjeta || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String((item.payments.usdTarjeta || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">COP</label>
+                                                                        <div className="flex items-center">
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String(Math.max(0, (item.payments.cop || 0) - 1000))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="100" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0" />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String((item.payments.cop || 0) + 1000)) }}><Plus className="h-3 w-3" /></Button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">Bolívares</label>
+                                                                        <div className="flex items-center">
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String(Math.max(0, (item.payments.ves || 0) - 10))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String((item.payments.ves || 0) + 10)) }}><Plus className="h-3 w-3" /></Button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
                                             )
-                                        })
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="border rounded-md shrink-0 flex-none sm:flex-1 overflow-auto max-h-[30vh] sm:min-h-[200px] sm:max-h-[35vh]">
-                                    <Table>
-                                        <TableHeader className="sticky top-0 bg-background z-10">
-                                            <TableRow>
-                                                <TableHead>Producto</TableHead>
-                                                <TableHead className="w-[80px]">Cant.</TableHead>
-                                                <TableHead className="w-[180px]">Total Adeudado</TableHead>
-                                                <TableHead>Pagos del Cliente</TableHead>
-                                                <TableHead className="w-[50px] text-right"></TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {cart.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                                        El carrito está vacío.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                cart.map((item) => {
-                                                    const p = item.product;
-                                                    const unitVes = getDynamicVes(p, item.vesBaseCurrency);
-                                                    return (
-                                                        <TableRow key={p.id}>
-                                                            <TableCell className="font-medium align-top py-4">{p.name}</TableCell>
-                                                            <TableCell className="align-top py-4">
-                                                                <Input
-                                                                    type="number"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => updateCartQuantity(p.id, e.target.value)}
-                                                                    min="1"
-                                                                    max={p.stock}
-                                                                    className="w-16 h-8"
-                                                                />
-                                                                <div className="text-[10px] text-muted-foreground mt-1 text-center">Máx: {p.stock}</div>
-                                                            </TableCell>
-                                                            <TableCell className="align-top py-4 ">
-                                                                <div className="space-y-1 text-sm border-l pl-3 bg-muted/20 p-2 rounded-md">
-                                                                    <div className="flex flex-col gap-1 mb-4">
-                                                                        <Select value={item.vesBaseCurrency} onValueChange={(val: "usd" | "cop") => updateItemVesBaseCurrency(p.id, val)}>
-                                                                            <SelectTrigger className="h-7 w-full text-xs px-2 py-0">
-                                                                                <SelectValue placeholder="Base..." />
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="usd" className="text-xs">Base: USD Tarjeta</SelectItem>
-                                                                                <SelectItem value="cop" className="text-xs">Base: COP</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </div>
-                                                                    <div className="font-medium text-foreground">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)} USD (T)</div>
-                                                                    <div className="text-muted-foreground">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)} USD (F)</div>
-                                                                    <div className="text-muted-foreground">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')} COP</div>
-                                                                    <div className="text-muted-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="align-top py-2">
-                                                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Badge variant="outline" className="w-[50px] justify-center">USD F</Badge>
-                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Badge variant="outline" className="w-[50px] justify-center">USD T</Badge>
-                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Badge variant="outline" className="w-[50px] justify-center">COP</Badge>
-                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0.00" />
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Badge variant="outline" className="w-[50px] justify-center">VES</Badge>
-                                                                        <Input type="number" step="0.01" className="h-7 w-28" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
-                                                                    </div>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="align-top py-4 text-right">
-                                                                <Button variant="ghost" size="icon" className="text-destructive h-8" onClick={() => removeFromCart(p.id)}>
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )
-                                                })
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
+                                        })}
+                                    </Accordion>
+                                )}
+                            </div>
 
                             <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
                                 <div className="space-y-4 flex-1">
