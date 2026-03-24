@@ -400,10 +400,7 @@ export function SalesTable() {
                     return {
                         productId: c.product.id,
                         quantity: c.quantity,
-                        unitPrice: {
-                            ...safePrice,
-                            ves: getDynamicVes(c.product, c.vesBaseCurrency)
-                        },
+                        unitPrice: safePrice,
                         totalPrice: {
                             usdTarjeta: (safePrice.usdTarjeta || 0) * c.quantity,
                             usdFisico: (safePrice.usdFisico || 0) * c.quantity,
@@ -479,7 +476,17 @@ export function SalesTable() {
         });
     }, [cart]);
 
-    const canCheckout = cart.length > 0 && !isSubmitting && (saleStatus === "fiado" || !hasItemsWithoutPrice);
+    // Check if any cart item has NO payment assigned (all payment fields are 0)
+    const itemsWithoutPayment = React.useMemo(() => {
+        return cart.filter(item => {
+            const pay = item.payments;
+            return (pay.usdTarjeta || 0) === 0 && (pay.usdFisico || 0) === 0 && (pay.cop || 0) === 0 && (pay.ves || 0) === 0;
+        });
+    }, [cart]);
+
+    const hasItemsWithoutPayment = itemsWithoutPayment.length > 0;
+
+    const canCheckout = cart.length > 0 && !isSubmitting && (saleStatus === "fiado" || (!hasItemsWithoutPrice && !hasItemsWithoutPayment));
 
     return (
         <div className="space-y-8">
@@ -834,7 +841,13 @@ export function SalesTable() {
 
                             {hasItemsWithoutPrice && saleStatus !== "fiado" && cart.length > 0 && (
                                 <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
-                                    Hay productos en el carrito sin precio asignado (con valor 0). Para poder procesar esta venta, el estado de la venta debe ser "Fiado".
+                                    Hay productos en el carrito sin precio asignado (con valor 0). Para poder procesar esta venta, el estado de la venta debe ser &quot;Fiado&quot;.
+                                </div>
+                            )}
+
+                            {hasItemsWithoutPayment && saleStatus !== "fiado" && cart.length > 0 && (
+                                <div className="mt-2 text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                    Los siguientes productos no tienen pago asignado: <strong>{itemsWithoutPayment.map(i => i.product.name).join(", ")}</strong>. Asigna al menos un monto de pago a cada producto o cambia el estado a &quot;Fiado&quot;.
                                 </div>
                             )}
 
