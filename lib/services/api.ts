@@ -79,6 +79,7 @@ export interface SaleItem {
 
 export interface Sale {
     id: string;
+    customerName?: string | null;
     date: string;
     items: SaleItem[];
     // Real totals physically received across the whole sale
@@ -382,6 +383,12 @@ export const api = {
         return fetchApi<Sale>("/sales", {
             method: "POST",
             body: JSON.stringify(sale),
+        });
+    },
+    paySale: async (id: string, data: { payment: { usdFisico: number, usdTarjeta: number, cop: number, ves: number }, isFullyPaid?: boolean }): Promise<Sale> => {
+        return fetchApi<Sale>(`/sales/${id}/pay`, {
+            method: "PATCH",
+            body: JSON.stringify(data),
         });
     },
 };

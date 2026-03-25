@@ -461,7 +461,7 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                         min="0"
                         required
                     />
-                    <div className="text-xs text-muted-foreground">Para calcular VES.</div>
+                    <div className="text-xs text-muted-foreground">Para calcular Bs.</div>
                 </div>
                 <div className="space-y-1">
                     <label className="text-sm font-medium">USD Físico ($)</label>

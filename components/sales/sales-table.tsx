@@ -96,16 +96,25 @@ export function SalesTable() {
     const observerTarget = React.useRef<HTMLDivElement>(null)
 
     const [saleStatus, setSaleStatus] = React.useState<"pagado" | "fiado" | "debiendo">("pagado")
+    const [customerName, setCustomerName] = React.useState("")
     const [defaultCurrency, setDefaultCurrency] = React.useState<"none" | "usdFisico" | "usdTarjeta" | "cop" | "ves">("none")
     const [receivedUsdForChange, setReceivedUsdForChange] = React.useState("")
+    const [receivedCurrencyForChange, setReceivedCurrencyForChange] = React.useState<"usd" | "cop" | "ves">("usd")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [checkoutError, setCheckoutError] = React.useState<string | null>(null)
+    const [globalFractionPayments, setGlobalFractionPayments] = React.useState({ usdFisico: 0, usdTarjeta: 0, cop: 0, ves: 0 })
 
     // View Details states
     const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
     const [selectedSale, setSelectedSale] = React.useState<Sale | null>(null)
     const [detailProductNames, setDetailProductNames] = React.useState<Record<string, string>>({})
     const [isLoadingDetails, setIsLoadingDetails] = React.useState(false)
+
+    // Abono states
+    const [abonoPayments, setAbonoPayments] = React.useState({ usdFisico: 0, usdTarjeta: 0, cop: 0, ves: 0 })
+    const [isSubmittingAbono, setIsSubmittingAbono] = React.useState(false)
+    const [abonoError, setAbonoError] = React.useState<string | null>(null)
+    const [isFullyPaidAbono, setIsFullyPaidAbono] = React.useState(false)
 
     const getDynamicVes = React.useCallback((p: Product, baseCurrency: "usd" | "cop") => {
         if (!p.price) return 0;
@@ -116,6 +125,14 @@ export function SalesTable() {
 
     // Derived Grand Totals (What the customer ACTUALLY deposited)
     const receivedTotals = React.useMemo(() => {
+        if (saleStatus === 'debiendo') {
+            return {
+                usdTarjeta: globalFractionPayments.usdTarjeta || 0,
+                usdFisico: globalFractionPayments.usdFisico || 0,
+                cop: globalFractionPayments.cop || 0,
+                ves: globalFractionPayments.ves || 0
+            };
+        }
         let uT = 0, uF = 0, c = 0, v = 0;
         cart.forEach(item => {
             uT += item.payments.usdTarjeta;
@@ -124,7 +141,7 @@ export function SalesTable() {
             v += item.payments.ves;
         });
         return { usdTarjeta: uT, usdFisico: uF, cop: c, ves: v }
-    }, [cart]);
+    }, [cart, saleStatus, globalFractionPayments]);
 
     // Theoretical Debt/Cart Totals
     const cartTotals = React.useMemo(() => {
@@ -284,8 +301,11 @@ export function SalesTable() {
         setCart([])
         setSearchCombobox("")
         setSaleStatus("pagado")
+        setCustomerName("")
         setDefaultCurrency("none")
         setReceivedUsdForChange("")
+        setReceivedCurrencyForChange("usd")
+        setGlobalFractionPayments({ usdFisico: 0, usdTarjeta: 0, cop: 0, ves: 0 })
         setCheckoutError(null)
     }
 
@@ -309,13 +329,13 @@ export function SalesTable() {
             else if (defaultCurrency === "ves") payments.ves = getDynamicVes(prod, initialVesBaseCurrency);
         }
 
-        setCart(prev => [...prev, {
+        setCart(prev => [{
             product: prod,
             quantity: 1,
             vesBaseCurrency: initialVesBaseCurrency,
             autoPaymentMethod: defaultCurrency,
             payments
-        }]);
+        }, ...prev]);
         setOpenCombobox(false);
         setSearchCombobox("");
     }
@@ -395,6 +415,7 @@ export function SalesTable() {
 
         try {
             await api.createSale({
+                customerName: customerName.trim() ? customerName.trim() : undefined,
                 items: cart.map(c => {
                     const safePrice = c.product.price || { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0, exchangeType: 'usd' as const };
                     return {
@@ -426,11 +447,33 @@ export function SalesTable() {
         }
     }
 
+    const handleAbono = async () => {
+        if (!selectedSale) return;
+        setIsSubmittingAbono(true);
+        setAbonoError(null);
+        try {
+            await api.paySale(selectedSale.id, {
+                payment: abonoPayments,
+                isFullyPaid: isFullyPaidAbono
+            });
+            await loadData();
+            setRefreshTrigger(prev => prev + 1);
+            setIsDetailsOpen(false); // Close dialog on success
+        } catch (error: any) {
+            setAbonoError(error.message || "Ocurrió un error al procesar el abono.");
+        } finally {
+            setIsSubmittingAbono(false);
+        }
+    }
+
     const openDetails = async (sale: Sale) => {
         setSelectedSale(sale);
         setIsDetailsOpen(true);
         setIsLoadingDetails(true);
         setDetailProductNames({});
+        setAbonoPayments({ usdFisico: 0, usdTarjeta: 0, cop: 0, ves: 0 });
+        setIsFullyPaidAbono(false);
+        setAbonoError(null);
 
         try {
             // Fetch product names for all items in the sale
@@ -476,17 +519,37 @@ export function SalesTable() {
         });
     }, [cart]);
 
-    // Check if any cart item has NO payment assigned (all payment fields are 0)
     const itemsWithoutPayment = React.useMemo(() => {
+        if (saleStatus === 'debiendo') {
+            const hasGlobal = (globalFractionPayments.usdFisico || 0) > 0 || (globalFractionPayments.usdTarjeta || 0) > 0 || (globalFractionPayments.cop || 0) > 0 || (globalFractionPayments.ves || 0) > 0;
+            if (hasGlobal) return [];
+        }
         return cart.filter(item => {
             const pay = item.payments;
             return (pay.usdTarjeta || 0) === 0 && (pay.usdFisico || 0) === 0 && (pay.cop || 0) === 0 && (pay.ves || 0) === 0;
         });
-    }, [cart]);
+    }, [cart, saleStatus, globalFractionPayments]);
 
     const hasItemsWithoutPayment = itemsWithoutPayment.length > 0;
 
     const canCheckout = cart.length > 0 && !isSubmitting && (saleStatus === "fiado" || (!hasItemsWithoutPrice && !hasItemsWithoutPayment));
+
+    const activeFractionCurrency = React.useMemo(() => {
+        return Object.entries(globalFractionPayments).find(([_, v]) => v > 0)?.[0] || null;
+    }, [globalFractionPayments]);
+
+    // Calculator values
+    const changeReceivedInUsd = React.useMemo(() => {
+        const amount = parseFloat(receivedUsdForChange) || 0;
+        if (receivedCurrencyForChange === "usd") return amount;
+        if (receivedCurrencyForChange === "cop") return amount / rates.copUsd;
+        if (receivedCurrencyForChange === "ves") return amount / rates.bcv;
+        return 0;
+    }, [receivedUsdForChange, receivedCurrencyForChange, rates]);
+
+    const changeInUsd = Math.max(0, changeReceivedInUsd - cartTotals.usdFisico);
+    const changeInCop = changeInUsd * rates.copUsd;
+    const changeInVes = changeInUsd * rates.bcv;
 
     return (
         <div className="space-y-8">
@@ -730,7 +793,7 @@ export function SalesTable() {
                                                                 <div className="text-muted-foreground flex flex-col">USD(T)<span className="text-foreground font-medium">${((p.price?.usdTarjeta || 0) * item.quantity).toFixed(2)}</span></div>
                                                                 <div className="text-muted-foreground flex flex-col">USD(F)<span className="text-foreground font-medium">${((p.price?.usdFisico || 0) * item.quantity).toFixed(2)}</span></div>
                                                                 <div className="text-muted-foreground flex flex-col">COP<span className="text-foreground font-medium">${((p.price?.cop || 0) * item.quantity).toLocaleString('es-CO')}</span></div>
-                                                                <div className="text-muted-foreground flex flex-col">VES<span className="text-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></div>
+                                                                <div className="text-muted-foreground flex flex-col">Bs<span className="text-foreground font-medium">Bs. {(unitVes * item.quantity).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></div>
                                                             </div>
 
                                                             {/* Customer Payments */}
@@ -783,38 +846,132 @@ export function SalesTable() {
                             <div className="mt-6 flex flex-col md:flex-row gap-8 justify-between bg-muted/30 p-4 rounded-lg border">
                                 <div className="space-y-4 flex-1">
                                     <h4 className="font-semibold mb-2">Estado General de Venta</h4>
-                                    <div className="space-y-2 pt-2">
-                                        <label className="text-sm font-medium">Condición del Cobro:</label>
-                                        <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
-                                            <SelectTrigger className="w-[180px]">
-                                                <SelectValue placeholder="Estado..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="pagado">Pagado Totalidad</SelectItem>
-                                                <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
-                                                <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Condición del Cobro:</label>
+                                            <Select value={saleStatus} onValueChange={(val: any) => setSaleStatus(val)}>
+                                                <SelectTrigger className="w-[180px]">
+                                                    <SelectValue placeholder="Estado..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="pagado">Pagado Totalidad</SelectItem>
+                                                    <SelectItem value="fiado">Fiado (Pendiente)</SelectItem>
+                                                    <SelectItem value="debiendo">Debiendo Fracción</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2 flex-1">
+                                            <label className="text-sm font-medium">Nombre del Cliente (Opcional):</label>
+                                            <Input 
+                                                placeholder="Ej. Jose Pérez" 
+                                                value={customerName} 
+                                                onChange={(e) => setCustomerName(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2 pt-2 border-t mt-4">
-                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Calculadora de Vuelto</h4>
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-xs pr-2">Billete/Monto USD Recibido:</label>
-                                                <Input
-                                                    type="number"
-                                                    step="any"
-                                                    placeholder="Ej. 10.00"
-                                                    value={receivedUsdForChange}
-                                                    onChange={(e) => setReceivedUsdForChange(e.target.value)}
-                                                    className="w-[180px]"
-                                                />
+                                    <div className="space-y-2">
+                                        {saleStatus === 'debiendo' && (
+                                            <div className="pt-3 space-y-2 border-t mt-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-lg font-medium text-muted-foreground">Monto de la Fracción Inicial</label>
+                                                    <span className="text-sm text-muted-foreground">Indícale al cliente el total en la moneda que desee pagar.</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 text-xs w-full sm:w-[350px]">
+                                                    <div className="space-y-1">
+                                                        <div className="flex flex-col items-center mb-2 gap-1.5">
+                                                            <label className="text-[15px] text-muted-foreground uppercase font-semibold text-center">USD Físico</label>
+                                                            <span className="text-[15px] font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded border border-green-200 dark:border-green-800 break-keep whitespace-nowrap text-center w-full" title="Total a cobrar">Total: ${cartTotals.usdFisico.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex items-center">
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdFisico'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, usdFisico: Math.max(0, (p.usdFisico || 0) - 1) })) }}><Minus className="h-3 w-3" /></Button>
+                                                            <Input type="number" step="0.01" value={globalFractionPayments.usdFisico || ""} onChange={(e) => setGlobalFractionPayments(p => ({ ...p, usdFisico: parseFloat(e.target.value) || 0 }))} disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdFisico'} placeholder="0.00" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdFisico'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, usdFisico: (p.usdFisico || 0) + 1 })) }}><Plus className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex flex-col items-center mb-2 gap-1.5">
+                                                            <label className="text-[15px] text-muted-foreground uppercase font-semibold text-center">USD Tarjeta</label>
+                                                            <span className="text-[15px] font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded border border-green-200 dark:border-green-800 break-keep whitespace-nowrap text-center w-full" title="Total a cobrar">Total: ${cartTotals.usdTarjeta.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex items-center">
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdTarjeta'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, usdTarjeta: Math.max(0, (p.usdTarjeta || 0) - 1) })) }}><Minus className="h-3 w-3" /></Button>
+                                                            <Input type="number" step="0.01" value={globalFractionPayments.usdTarjeta || ""} onChange={(e) => setGlobalFractionPayments(p => ({ ...p, usdTarjeta: parseFloat(e.target.value) || 0 }))} disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdTarjeta'} placeholder="0.00" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'usdTarjeta'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, usdTarjeta: (p.usdTarjeta || 0) + 1 })) }}><Plus className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex flex-col items-center mb-2 gap-1.5">
+                                                            <label className="text-[15px] text-muted-foreground uppercase font-semibold text-center">COP</label>
+                                                            <span className="text-[15px] font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded border border-green-200 dark:border-green-800 break-keep whitespace-nowrap text-center w-full" title="Total a cobrar">Total: ${cartTotals.cop.toLocaleString('es-CO')}</span>
+                                                        </div>
+                                                        <div className="flex items-center">
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'cop'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, cop: Math.max(0, (p.cop || 0) - 1000) })) }}><Minus className="h-3 w-3" /></Button>
+                                                            <Input type="number" step="100" value={globalFractionPayments.cop || ""} onChange={(e) => setGlobalFractionPayments(p => ({ ...p, cop: parseFloat(e.target.value) || 0 }))} disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'cop'} placeholder="0" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'cop'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, cop: (p.cop || 0) + 1000 })) }}><Plus className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex flex-col items-center mb-2 gap-1.5">
+                                                            <label className="text-[15px] text-muted-foreground uppercase font-semibold text-center">Bolívares</label>
+                                                            <span className="text-[15px] font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded border border-green-200 dark:border-green-800 break-keep whitespace-nowrap text-center w-full" title="Total a cobrar">Total: Bs. {cartTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className="flex items-center">
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'ves'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, ves: Math.max(0, (p.ves || 0) - 10) })) }}><Minus className="h-3 w-3" /></Button>
+                                                            <Input type="number" step="0.01" value={globalFractionPayments.ves || ""} onChange={(e) => setGlobalFractionPayments(p => ({ ...p, ves: parseFloat(e.target.value) || 0 }))} disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'ves'} placeholder="0.00" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" disabled={activeFractionCurrency !== null && activeFractionCurrency !== 'ves'} onClick={(e) => { e.preventDefault(); setGlobalFractionPayments(p => ({ ...p, ves: (p.ves || 0) + 10 })) }}><Plus className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            {parseFloat(receivedUsdForChange) > cartTotals.usdFisico && (
+                                        )}
+                                    </div>
+                                    <div className="space-y-4 pt-4 border-t mt-4">
+                                        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Calculadora de Vuelto</h4>
+                                        <div className="flex flex-col gap-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-end gap-4">
                                                 <div className="space-y-1">
-                                                    <label className="text-xs text-green-600 font-semibold">Vuelto a entregar (COP):</label>
-                                                    <div className="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-md border border-green-200">
-                                                        {((parseFloat(receivedUsdForChange) - cartTotals.usdFisico) * rates.copUsd).toLocaleString('es-CO')} COP
+                                                    <label className="text-xs text-muted-foreground uppercase font-semibold">Monto Recibido</label>
+                                                    <div className="flex items-center">
+                                                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-r-none border-r-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setReceivedUsdForChange(String(Math.max(0, (parseFloat(receivedUsdForChange) || 0) - (receivedCurrencyForChange === 'cop' ? 1000 : (receivedCurrencyForChange === 'ves' ? 10 : 1))))) }}><Minus className="h-4 w-4" /></Button>
+                                                        <Input
+                                                            type="number"
+                                                            step="any"
+                                                            placeholder="Monto"
+                                                            value={receivedUsdForChange}
+                                                            onChange={(e) => setReceivedUsdForChange(e.target.value)}
+                                                            className="h-9 px-0 text-center rounded-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none w-[108px]"
+                                                        />
+                                                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-l-none border-l-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setReceivedUsdForChange(String((parseFloat(receivedUsdForChange) || 0) + (receivedCurrencyForChange === 'cop' ? 1000 : (receivedCurrencyForChange === 'ves' ? 10 : 1)))) }}><Plus className="h-4 w-4" /></Button>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-muted-foreground uppercase font-semibold">Moneda de pago</label>
+                                                    <Select value={receivedCurrencyForChange} onValueChange={(val: any) => setReceivedCurrencyForChange(val)}>
+                                                        <SelectTrigger className="h-9 w-[120px]">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="usd">USD</SelectItem>
+                                                            <SelectItem value="cop">COP</SelectItem>
+                                                            <SelectItem value="ves">Bs</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+
+                                            {changeInUsd > 0 && (
+                                                <div className="space-y-2 mt-2">
+                                                    <label className="text-xs text-muted-foreground uppercase font-semibold">Vuelto a entregar (Equivalencias):</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <div className="text-sm font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1.5 rounded-md border border-green-200 dark:border-green-800">
+                                                            ${changeInUsd.toFixed(2)} USD
+                                                        </div>
+                                                        <div className="text-sm font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1.5 rounded-md border border-green-200 dark:border-green-800">
+                                                            ${changeInCop.toLocaleString('es-CO')} COP
+                                                        </div>
+                                                        <div className="text-sm font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1.5 rounded-md border border-green-200 dark:border-green-800">
+                                                            Bs. {changeInVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
@@ -885,7 +1042,7 @@ export function SalesTable() {
                                     <span className="text-sm font-medium">
                                         {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
-                                    <Badge variant={sale.status === 'pagado' ? 'default' : sale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize">
+                                    <Badge variant={sale.status === 'pagado' ? 'success' : sale.status === 'fiado' ? 'destructive' : 'warning'} className="capitalize">
                                         {sale.status}
                                     </Badge>
                                 </div>
@@ -916,7 +1073,7 @@ export function SalesTable() {
                                 <TableHead>Total (USD F)</TableHead>
                                 <TableHead>Total (USD T)</TableHead>
                                 <TableHead>Total (COP)</TableHead>
-                                <TableHead>Total (VES)</TableHead>
+                                <TableHead>Total (Bs)</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="w-[100px] text-right">Acciones</TableHead>
                             </TableRow>
@@ -951,7 +1108,8 @@ export function SalesTable() {
                                             <TableCell>{sale.receivedTotals.ves > 0 ? `Bs. ${sale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col gap-1 items-start">
-                                                    <Badge variant={sale.status === 'pagado' ? 'default' : sale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize">
+                                                    {sale.customerName && <span className="text-xs font-medium text-muted-foreground truncate max-w-[120px]" title={sale.customerName}>{sale.customerName}</span>}
+                                                    <Badge variant={sale.status === 'pagado' ? 'success' : sale.status === 'fiado' ? 'destructive' : 'warning'} className="capitalize">
                                                         {sale.status}
                                                     </Badge>
                                                 </div>
@@ -1075,8 +1233,8 @@ export function SalesTable() {
                                                         <div className="space-y-1">
                                                             <div>${item.totalPrice.usdFisico?.toFixed(2) || '0.00'} USD (F)</div>
                                                             <div>${item.totalPrice.usdTarjeta?.toFixed(2) || '0.00'} USD (T)</div>
-                                                            <div className="text-muted-foreground">${item.totalPrice.cop.toLocaleString('es-CO')} COP</div>
-                                                            <div className="text-muted-foreground">Bs. {item.totalPrice.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                                                            <div>${item.totalPrice.cop.toLocaleString('es-CO')} COP</div>
+                                                            <div>Bs. {item.totalPrice.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="align-top py-3">
@@ -1084,7 +1242,7 @@ export function SalesTable() {
                                                             {item.payments?.usdFisico > 0 && <div><Badge variant="outline" className="mr-2">USD (F)</Badge> ${item.payments.usdFisico.toFixed(2)}</div>}
                                                             {item.payments?.usdTarjeta > 0 && <div><Badge variant="outline" className="mr-2">USD (T)</Badge> ${item.payments.usdTarjeta.toFixed(2)}</div>}
                                                             {item.payments?.cop > 0 && <div><Badge variant="outline" className="mr-2">COP</Badge> ${item.payments.cop.toLocaleString('es-CO')}</div>}
-                                                            {item.payments?.ves > 0 && <div><Badge variant="outline" className="mr-2">VES</Badge> Bs. {item.payments.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>}
+                                                            {item.payments?.ves > 0 && <div><Badge variant="outline" className="mr-2">Bs</Badge> Bs. {item.payments.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>}
                                                             {(!item.payments || (item.payments.usdFisico === 0 && item.payments.usdTarjeta === 0 && item.payments.cop === 0 && item.payments.ves === 0)) && (
                                                                 <span className="text-muted-foreground italic">No hay pagos registrados para este ítem.</span>
                                                             )}
@@ -1100,9 +1258,12 @@ export function SalesTable() {
                             <div className="bg-muted p-4 rounded-lg flex justify-between items-center border">
                                 <div>
                                     <h4 className="font-semibold text-sm uppercase text-muted-foreground mb-1">Estado</h4>
-                                    <Badge variant={selectedSale.status === 'pagado' ? 'default' : selectedSale.status === 'fiado' ? 'secondary' : 'destructive'} className="capitalize text-lg">
-                                        {selectedSale.status}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1 items-start">
+                                        <Badge variant={selectedSale.status === 'pagado' ? 'success' : selectedSale.status === 'fiado' ? 'destructive' : 'warning'} className="capitalize text-lg">
+                                            {selectedSale.status}
+                                        </Badge>
+                                        {selectedSale.customerName && <span className="text-sm font-medium mt-1 text-muted-foreground">Cliente: {selectedSale.customerName}</span>}
+                                    </div>
                                 </div>
                                 <div className="text-right space-y-1">
                                     <h4 className="font-semibold text-sm uppercase text-muted-foreground mb-1">Total Recibido (Global)</h4>
@@ -1112,6 +1273,112 @@ export function SalesTable() {
                                     <div className="font-bold text-green-600">Bs. {selectedSale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
                                 </div>
                             </div>
+
+                            {(selectedSale.status === 'fiado' || selectedSale.status === 'debiendo') && (
+                                <div className="bg-muted/50 p-4 rounded-lg border mt-6 space-y-4">
+                                    <h3 className="font-semibold text-lg border-b pb-2">Abonar a esta Venta / Deuda Restante</h3>
+
+                                    {/* Debt Calculator */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                        {selectedSale.status === 'debiendo' ? (
+                                            // Calculate remaining debt specifically for the utilized currency
+                                            ['usdFisico', 'usdTarjeta', 'cop', 'ves'].map(currency => {
+                                                const paid = selectedSale.receivedTotals[currency as keyof typeof selectedSale.receivedTotals] || 0;
+                                                if (paid === 0) return null; // Debiendo only uses the active currency
+
+                                                // Calculate total price in this currency
+                                                const totalDebt = selectedSale.items.reduce((acc, item) => acc + (Number(item.totalPrice[currency as keyof typeof item.totalPrice]) || 0), 0);
+                                                const remaining = Math.max(0, totalDebt - paid);
+
+                                                return (
+                                                    <div key={currency} className="bg-background p-3 rounded shadow-sm border">
+                                                        <div className="text-xs text-muted-foreground uppercase">{currency} Aportado</div>
+                                                        <div className="font-medium text-lg text-primary">{paid}</div>
+                                                        <div className="text-xs text-muted-foreground uppercase mt-2">Saldo Pendiente</div>
+                                                        <div className="font-bold text-xl text-destructive">{remaining.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    </div>
+                                                )
+                                            })
+                                        ) : (
+                                            // For fiado, calculate total debt vs total paid across operations
+                                            ['usdFisico', 'usdTarjeta', 'cop', 'ves'].map(currency => {
+                                                const totalDebt = selectedSale.items.reduce((acc, item) => acc + (Number(item.totalPrice[currency as keyof typeof item.totalPrice]) || 0), 0);
+                                                const paid = selectedSale.receivedTotals[currency as keyof typeof selectedSale.receivedTotals] || 0;
+                                                const remaining = Math.max(0, totalDebt - paid);
+
+                                                return (
+                                                    <div key={currency} className="bg-background p-3 rounded shadow-sm border">
+                                                        <div className="text-xs text-muted-foreground uppercase">Deuda Orig. {currency}</div>
+                                                        <div className="font-medium text-md">{totalDebt.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                        <div className="text-xs text-muted-foreground uppercase mt-1">Pendiente</div>
+                                                        <div className={cn("font-bold text-lg", remaining > 0 ? "text-destructive" : "text-green-600")}>{remaining.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    </div>
+                                                )
+                                            })
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                                        {(selectedSale.status !== 'debiendo' || (selectedSale.receivedTotals.usdFisico || 0) > 0) && (
+                                            <div className="space-y-1">
+                                                <label className="text-[15px] text-muted-foreground uppercase font-semibold ">USD Físico</label>
+                                                <div className="flex items-center">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, usdFisico: Math.max(0, (p.usdFisico || 0) - 1) })) }}><Minus className="h-3 w-3" /></Button>
+                                                    <Input type="number" step="0.01" value={abonoPayments.usdFisico || ""} onChange={(e) => setAbonoPayments(p => ({ ...p, usdFisico: parseFloat(e.target.value) || 0 }))} className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, usdFisico: (p.usdFisico || 0) + 1 })) }}><Plus className="h-3 w-3" /></Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {(selectedSale.status !== 'debiendo' || (selectedSale.receivedTotals.usdTarjeta || 0) > 0) && (
+                                            <div className="space-y-1">
+                                                <label className="text-[15px] text-muted-foreground uppercase font-semibold">USD Tarjeta</label>
+                                                <div className="flex items-center">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, usdTarjeta: Math.max(0, (p.usdTarjeta || 0) - 1) })) }}><Minus className="h-3 w-3" /></Button>
+                                                    <Input type="number" step="0.01" value={abonoPayments.usdTarjeta || ""} onChange={(e) => setAbonoPayments(p => ({ ...p, usdTarjeta: parseFloat(e.target.value) || 0 }))} className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, usdTarjeta: (p.usdTarjeta || 0) + 1 })) }}><Plus className="h-3 w-3" /></Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {(selectedSale.status !== 'debiendo' || (selectedSale.receivedTotals.cop || 0) > 0) && (
+                                            <div className="space-y-1">
+                                                <label className="text-[15px] text-muted-foreground uppercase font-semibold">COP</label>
+                                                <div className="flex items-center">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, cop: Math.max(0, (p.cop || 0) - 1000) })) }}><Minus className="h-3 w-3" /></Button>
+                                                    <Input type="number" step="100" value={abonoPayments.cop || ""} onChange={(e) => setAbonoPayments(p => ({ ...p, cop: parseFloat(e.target.value) || 0 }))} className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, cop: (p.cop || 0) + 1000 })) }}><Plus className="h-3 w-3" /></Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {(selectedSale.status !== 'debiendo' || (selectedSale.receivedTotals.ves || 0) > 0) && (
+                                            <div className="space-y-1">
+                                                <label className="text-[15px] text-muted-foreground uppercase font-semibold">Bolívares</label>
+                                                <div className="flex items-center">
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, ves: Math.max(0, (p.ves || 0) - 10) })) }}><Minus className="h-3 w-3" /></Button>
+                                                    <Input type="number" step="0.01" value={abonoPayments.ves || ""} onChange={(e) => setAbonoPayments(p => ({ ...p, ves: parseFloat(e.target.value) || 0 }))} className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" />
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0 bg-background" onClick={(e) => { e.preventDefault(); setAbonoPayments(p => ({ ...p, ves: (p.ves || 0) + 10 })) }}><Plus className="h-3 w-3" /></Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 pt-2">
+                                        <input type="checkbox" id="full-pay" checked={isFullyPaidAbono} onChange={(e) => setIsFullyPaidAbono(e.target.checked)} className="h-4 w-4 rounded border-input" />
+                                        <label htmlFor="full-pay" className="text-sm font-medium cursor-pointer">Marcar como pagado por completo (cambiará estado a Pagado)</label>
+                                    </div>
+
+                                    {abonoError && (
+                                        <div className="text-sm text-destructive font-medium border border-destructive/50 bg-destructive/10 p-3 rounded-md">
+                                            {abonoError}
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end pt-4">
+                                        <Button onClick={handleAbono} disabled={isSubmittingAbono || (abonoPayments.usdFisico === 0 && abonoPayments.usdTarjeta === 0 && abonoPayments.cop === 0 && abonoPayments.ves === 0 && !isFullyPaidAbono)}>
+                                            {isSubmittingAbono ? "Procesando..." : "Registrar Abono"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </DialogContent>
