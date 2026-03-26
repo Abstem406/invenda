@@ -60,6 +60,9 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
+import { Calendar } from "@/components/ui/calendar"
 
 // Local interface for Cart Items before posting to API
 interface CartItem {
@@ -172,8 +175,8 @@ export function SalesTable() {
     })
 
     // Filter states
-    const [dateFrom, setDateFrom] = React.useState("")
-    const [dateTo, setDateTo] = React.useState("")
+    const [dateFrom, setDateFrom] = React.useState<Date | undefined>()
+    const [dateTo, setDateTo] = React.useState<Date | undefined>()
     const [filterUserId, setFilterUserId] = React.useState("")
     const [users, setUsers] = React.useState<User[]>([])
 
@@ -243,8 +246,8 @@ export function SalesTable() {
                     page: currentPage,
                     limit: limit,
                     search: debouncedSearch || undefined,
-                    dateFrom: dateFrom || undefined,
-                    dateTo: dateTo || undefined,
+                    dateFrom: dateFrom ? format(dateFrom, "yyyy-MM-dd") : undefined,
+                    dateTo: dateTo ? format(dateTo, "yyyy-MM-dd") : undefined,
                     userId: filterUserId || undefined,
                 }),
                 api.getExchangeRates()
@@ -1061,26 +1064,58 @@ export function SalesTable() {
                 </Dialog>
                 </div>
                 {/* Filter bar */}
-                <div className="flex flex-wrap items-end gap-3 bg-muted/30 p-3 rounded-lg border">
-                    <div className="space-y-1">
+                <div className="flex flex-wrap items-end gap-4 bg-muted/30 p-3 rounded-lg border">
+                    <div className="flex flex-col space-y-1.5">
                         <label className="text-xs text-muted-foreground uppercase font-semibold">Desde</label>
-                        <Input
-                            type="date"
-                            value={dateFrom}
-                            onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                            className="h-9 w-[160px] text-sm"
-                        />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-[160px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
+                                        !dateFrom && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                    {dateFrom ? format(dateFrom, "PP", { locale: es }) : <span>Seleccionar fecha</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={dateFrom}
+                                    onSelect={(d) => { setDateFrom(d); setCurrentPage(1); }}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
                     </div>
-                    <div className="space-y-1">
+                    <div className="flex flex-col space-y-1.5">
                         <label className="text-xs text-muted-foreground uppercase font-semibold">Hasta</label>
-                        <Input
-                            type="date"
-                            value={dateTo}
-                            onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                            className="h-9 w-[160px] text-sm"
-                        />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-[160px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
+                                        !dateTo && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                    {dateTo ? format(dateTo, "PP", { locale: es }) : <span>Seleccionar fecha</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={dateTo}
+                                    onSelect={(d) => { setDateTo(d); setCurrentPage(1); }}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
                     </div>
-                    <div className="space-y-1">
+                    <div className="flex flex-col space-y-1.5">
                         <label className="text-xs text-muted-foreground uppercase font-semibold">Cajero</label>
                         <Select value={filterUserId} onValueChange={(val) => { setFilterUserId(val === 'all' ? '' : val); setCurrentPage(1); }}>
                             <SelectTrigger className="h-9 w-[180px] text-sm">
@@ -1095,14 +1130,16 @@ export function SalesTable() {
                         </Select>
                     </div>
                     {(dateFrom || dateTo || filterUserId) && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-9 text-xs text-muted-foreground"
-                            onClick={() => { setDateFrom(''); setDateTo(''); setFilterUserId(''); setCurrentPage(1); }}
-                        >
-                            <X className="w-3 h-3 mr-1" /> Limpiar filtros
-                        </Button>
+                        <div className="flex flex-col justify-end pb-0.5">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 text-xs text-muted-foreground"
+                                onClick={() => { setDateFrom(undefined); setDateTo(undefined); setFilterUserId(''); setCurrentPage(1); }}
+                            >
+                                <X className="w-3 h-3 mr-1" /> Limpiar filtros
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>
