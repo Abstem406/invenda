@@ -90,6 +90,8 @@ export interface Sale {
         ves: number;
     };
     status: "pagado" | "fiado" | "debiendo";
+    userId: string;
+    user?: { id: string; name: string | null; email: string };
     createdAt?: string;
     updatedAt?: string;
     deletedAt?: string | null;
@@ -231,6 +233,9 @@ export interface QueryParams {
     limit?: number;
     search?: string;
     hasPrice?: boolean | string;
+    dateFrom?: string;
+    dateTo?: string;
+    userId?: string;
 }
 
 const buildQueryString = (params?: QueryParams) => {
@@ -240,6 +245,9 @@ const buildQueryString = (params?: QueryParams) => {
     if (params.limit !== undefined) query.append("limit", params.limit.toString());
     if (params.search !== undefined) query.append("search", params.search);
     if (params.hasPrice !== undefined) query.append("hasPrice", params.hasPrice.toString());
+    if (params.dateFrom !== undefined) query.append("dateFrom", params.dateFrom);
+    if (params.dateTo !== undefined) query.append("dateTo", params.dateTo);
+    if (params.userId !== undefined) query.append("userId", params.userId);
     const queryString = query.toString();
     return queryString ? `?${queryString}` : "";
 };
@@ -379,7 +387,7 @@ export const api = {
     getSales: async (params?: QueryParams): Promise<PaginatedResponse<Sale>> => {
         return fetchApi<PaginatedResponse<Sale>>(`/sales${buildQueryString(params)}`);
     },
-    createSale: async (sale: Omit<Sale, "id" | "date">): Promise<Sale> => {
+    createSale: async (sale: Omit<Sale, "id" | "date" | "userId" | "user">): Promise<Sale> => {
         return fetchApi<Sale>("/sales", {
             method: "POST",
             body: JSON.stringify(sale),

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { api, Sale, ExchangeRates, Product } from "@/lib/services/api"
+import { api, Sale, ExchangeRates, Product, User } from "@/lib/services/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
     Table,
@@ -43,7 +43,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Minus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2 } from "lucide-react"
+import { Plus, Minus, Trash2, Eye, ShoppingCart, Check, ChevronsUpDown, Loader2, CalendarIcon, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -171,6 +171,12 @@ export function SalesTable() {
         return 5
     })
 
+    // Filter states
+    const [dateFrom, setDateFrom] = React.useState("")
+    const [dateTo, setDateTo] = React.useState("")
+    const [filterUserId, setFilterUserId] = React.useState("")
+    const [users, setUsers] = React.useState<User[]>([])
+
     // Debounce search
     React.useEffect(() => {
         const timer = setTimeout(() => {
@@ -180,14 +186,41 @@ export function SalesTable() {
         return () => clearTimeout(timer)
     }, [searchTerm])
 
+    // Load users for the filter dropdown
+    React.useEffect(() => {
+        const loadUsers = async () => {
+            try {
+                const userList = await api.getUsers();
+                setUsers(userList);
+            } catch (err) {
+                console.error("Error loading users", err);
+            }
+        };
+        loadUsers();
+    }, [])
+
     React.useEffect(() => {
         loadData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, debouncedSearch, limit])
+    }, [currentPage, debouncedSearch, limit, dateFrom, dateTo, filterUserId])
+
+    // When saleStatus changes to 'fiado', reset all payments to zero and disable auto-pay
+    React.useEffect(() => {
+        if (saleStatus === 'fiado') {
+            setDefaultCurrency('none');
+            setCart(prev => prev.map(item => ({
+                ...item,
+                autoPaymentMethod: 'none',
+                payments: { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 }
+            })));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [saleStatus])
 
     // When defaultCurrency changes, recalculate ALL cart items payments immediately
     React.useEffect(() => {
         if (cart.length === 0) return;
+        if (saleStatus === 'fiado') return; // Skip recalculation when fiado
         setCart(prev => prev.map(item => {
             const payments = { usdTarjeta: 0, usdFisico: 0, cop: 0, ves: 0 };
             if (defaultCurrency && defaultCurrency !== "none") {
@@ -209,7 +242,10 @@ export function SalesTable() {
                 api.getSales({
                     page: currentPage,
                     limit: limit,
-                    search: debouncedSearch || undefined
+                    search: debouncedSearch || undefined,
+                    dateFrom: dateFrom || undefined,
+                    dateTo: dateTo || undefined,
+                    userId: filterUserId || undefined,
                 }),
                 api.getExchangeRates()
             ])
@@ -553,16 +589,17 @@ export function SalesTable() {
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
-                    <h2 className="text-xl font-semibold hidden sm:block">Historial de Ventas</h2>
-                    <Input
-                        placeholder="Buscar por estado (ej. pagado)..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="max-w-xs"
-                    />
-                </div>
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+                        <h2 className="text-xl font-semibold hidden sm:block">Historial de Ventas</h2>
+                        <Input
+                            placeholder="Buscar por estado (ej. pagado)..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="max-w-xs"
+                        />
+                    </div>
                 <Dialog open={isCreateOpen} onOpenChange={(val) => {
                     setIsCreateOpen(val);
                     if (!val) resetForm();
@@ -573,7 +610,7 @@ export function SalesTable() {
                             Nueva Venta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-[100vw] sm:max-w-[95vw] w-full sm:w-[95vw] h-[100dvh] sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6 rounded-none sm:rounded-lg">
+                    <DialogContent className="max-w-[100vw] sm:max-w-[95vw] w-full sm:w-[95vw] h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:min-h-[80vh] flex flex-col overflow-hidden p-4 sm:p-6 rounded-none sm:rounded-lg">
                         <DialogHeader className="shrink-0">
                             <DialogTitle>Registrar Nueva Venta</DialogTitle>
                             <DialogDescription>
@@ -648,7 +685,7 @@ export function SalesTable() {
                                 </div>
                                 <div className="space-y-2 w-full sm:w-auto">
                                     <label className="text-sm font-medium">Metodo de pago automático</label>
-                                    <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)}>
+                                    <Select value={defaultCurrency} onValueChange={(val: any) => setDefaultCurrency(val)} disabled={saleStatus === 'fiado'}>
                                         <SelectTrigger className="w-[160px]">
                                             <SelectValue placeholder="Sin auto-pago" />
                                         </SelectTrigger>
@@ -773,7 +810,7 @@ export function SalesTable() {
                                                                 </div>
                                                                 <div className="space-y-1 flex-1 w-full flex-[2]">
                                                                     <label className="text-[10px] text-muted-foreground uppercase font-semibold text-primary/80">Método de Pago (Item)</label>
-                                                                    <Select value={item.autoPaymentMethod} onValueChange={(val: any) => updateItemAutoPaymentMethod(p.id, val)}>
+                                                                    <Select value={item.autoPaymentMethod} onValueChange={(val: any) => updateItemAutoPaymentMethod(p.id, val)} disabled={saleStatus === 'fiado'}>
                                                                         <SelectTrigger className="h-8 w-full text-xs border-primary/50 focus:ring-primary/30">
                                                                             <SelectValue placeholder="Manual / Variado" />
                                                                         </SelectTrigger>
@@ -798,38 +835,38 @@ export function SalesTable() {
 
                                                             {/* Customer Payments */}
                                                             <div className="space-y-2 pt-2 border-t mt-2">
-                                                                <label className="text-[10px] text-muted-foreground uppercase font-semibold">Pagos ingresados para este item</label>
-                                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs w-full">
+                                                                <label className="text-[10px] text-muted-foreground uppercase font-semibold">{saleStatus === 'fiado' ? 'Pagos deshabilitados (venta fiada)' : 'Pagos ingresados para este item'}</label>
+                                                                <div className={cn("grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs w-full", saleStatus === 'fiado' && "opacity-50 pointer-events-none")}>
                                                                     <div className="space-y-1">
                                                                         <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">USD Físico</label>
                                                                         <div className="flex items-center">
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String(Math.max(0, (item.payments.usdFisico || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
-                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" />
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String((item.payments.usdFisico || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String(Math.max(0, (item.payments.usdFisico || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdFisico || ""} onChange={(e) => updateItemPayment(p.id, "usdFisico", e.target.value)} placeholder="0.00" disabled={saleStatus === 'fiado'} />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdFisico", String((item.payments.usdFisico || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
                                                                         </div>
                                                                     </div>
                                                                     <div className="space-y-1">
                                                                         <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">USD Tarjeta</label>
                                                                         <div className="flex items-center">
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String(Math.max(0, (item.payments.usdTarjeta || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
-                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" />
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String((item.payments.usdTarjeta || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String(Math.max(0, (item.payments.usdTarjeta || 0) - 1))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.usdTarjeta || ""} onChange={(e) => updateItemPayment(p.id, "usdTarjeta", e.target.value)} placeholder="0.00" disabled={saleStatus === 'fiado'} />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "usdTarjeta", String((item.payments.usdTarjeta || 0) + 1)) }}><Plus className="h-3 w-3" /></Button>
                                                                         </div>
                                                                     </div>
                                                                     <div className="space-y-1">
                                                                         <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">COP</label>
                                                                         <div className="flex items-center">
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String(Math.max(0, (item.payments.cop || 0) - 1000))) }}><Minus className="h-3 w-3" /></Button>
-                                                                            <Input type="number" step="100" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0" />
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String((item.payments.cop || 0) + 1000)) }}><Plus className="h-3 w-3" /></Button>
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String(Math.max(0, (item.payments.cop || 0) - 1000))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="100" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.cop || ""} onChange={(e) => updateItemPayment(p.id, "cop", e.target.value)} placeholder="0" disabled={saleStatus === 'fiado'} />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "cop", String((item.payments.cop || 0) + 1000)) }}><Plus className="h-3 w-3" /></Button>
                                                                         </div>
                                                                     </div>
                                                                     <div className="space-y-1">
                                                                         <label className="text-[10px] text-muted-foreground uppercase font-semibold text-center block w-full">Bolívares</label>
                                                                         <div className="flex items-center">
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String(Math.max(0, (item.payments.ves || 0) - 10))) }}><Minus className="h-3 w-3" /></Button>
-                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" />
-                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String((item.payments.ves || 0) + 10)) }}><Plus className="h-3 w-3" /></Button>
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-r-none border-r-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String(Math.max(0, (item.payments.ves || 0) - 10))) }}><Minus className="h-3 w-3" /></Button>
+                                                                            <Input type="number" step="0.01" className="h-8 w-full text-xs text-center rounded-none px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-10" value={item.payments.ves || ""} onChange={(e) => updateItemPayment(p.id, "ves", e.target.value)} placeholder="0.00" disabled={saleStatus === 'fiado'} />
+                                                                            <Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none border-l-0 shrink-0" disabled={saleStatus === 'fiado'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItemPayment(p.id, "ves", String((item.payments.ves || 0) + 10)) }}><Plus className="h-3 w-3" /></Button>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1022,6 +1059,52 @@ export function SalesTable() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+                </div>
+                {/* Filter bar */}
+                <div className="flex flex-wrap items-end gap-3 bg-muted/30 p-3 rounded-lg border">
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground uppercase font-semibold">Desde</label>
+                        <Input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                            className="h-9 w-[160px] text-sm"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground uppercase font-semibold">Hasta</label>
+                        <Input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                            className="h-9 w-[160px] text-sm"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground uppercase font-semibold">Cajero</label>
+                        <Select value={filterUserId} onValueChange={(val) => { setFilterUserId(val === 'all' ? '' : val); setCurrentPage(1); }}>
+                            <SelectTrigger className="h-9 w-[180px] text-sm">
+                                <SelectValue placeholder="Todos los cajeros" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos los cajeros</SelectItem>
+                                {users.map(u => (
+                                    <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {(dateFrom || dateTo || filterUserId) && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 text-xs text-muted-foreground"
+                            onClick={() => { setDateFrom(''); setDateTo(''); setFilterUserId(''); setCurrentPage(1); }}
+                        >
+                            <X className="w-3 h-3 mr-1" /> Limpiar filtros
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* Mobile Card View */}
@@ -1070,6 +1153,7 @@ export function SalesTable() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Fecha</TableHead>
+                                <TableHead>Cajero</TableHead>
                                 <TableHead>Total (USD F)</TableHead>
                                 <TableHead>Total (USD T)</TableHead>
                                 <TableHead>Total (COP)</TableHead>
@@ -1082,7 +1166,7 @@ export function SalesTable() {
                             {loading ? (
                                 Array.from({ length: 6 }).map((_, i) => (
                                     <TableRow key={i}>
-                                        {Array.from({ length: 7 }).map((_, j) => (
+                                        {Array.from({ length: 8 }).map((_, j) => (
                                             <TableCell key={j}>
                                                 <Skeleton className="h-4 w-full" />
                                             </TableCell>
@@ -1091,7 +1175,7 @@ export function SalesTable() {
                                 ))
                             ) : sales.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                         {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
                                     </TableCell>
                                 </TableRow>
@@ -1101,6 +1185,9 @@ export function SalesTable() {
                                         <TableRow key={sale.id}>
                                             <TableCell className="font-medium">
                                                 {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs text-muted-foreground" title={sale.user?.email}>{sale.user?.name || sale.user?.email || '-'}</span>
                                             </TableCell>
                                             <TableCell>{sale.receivedTotals.usdFisico > 0 ? `$${sale.receivedTotals.usdFisico.toFixed(2)}` : '-'}</TableCell>
                                             <TableCell>{sale.receivedTotals.usdTarjeta > 0 ? `$${sale.receivedTotals.usdTarjeta.toFixed(2)}` : '-'}</TableCell>
@@ -1263,6 +1350,7 @@ export function SalesTable() {
                                             {selectedSale.status}
                                         </Badge>
                                         {selectedSale.customerName && <span className="text-sm font-medium mt-1 text-muted-foreground">Cliente: {selectedSale.customerName}</span>}
+                                        {selectedSale.user && <span className="text-sm font-medium text-muted-foreground">Cajero: {selectedSale.user.name || selectedSale.user.email}</span>}
                                     </div>
                                 </div>
                                 <div className="text-right space-y-1">
