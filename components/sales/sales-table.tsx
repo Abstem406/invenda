@@ -166,6 +166,7 @@ export function SalesTable() {
     const [totalPages, setTotalPages] = React.useState(1)
     const [searchTerm, setSearchTerm] = React.useState("")
     const [debouncedSearch, setDebouncedSearch] = React.useState("")
+    const [statusFilter, setStatusFilter] = React.useState("")
     const [limit, setLimit] = React.useState<number>(() => {
         if (typeof window !== "undefined") {
             const saved = localStorage.getItem("invenda_sales_limit")
@@ -205,7 +206,7 @@ export function SalesTable() {
     React.useEffect(() => {
         loadData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, debouncedSearch, limit, dateFrom, dateTo, filterUserId])
+    }, [currentPage, debouncedSearch, limit, dateFrom, dateTo, filterUserId, statusFilter])
 
     // When saleStatus changes to 'fiado', reset all payments to zero and disable auto-pay
     React.useEffect(() => {
@@ -246,6 +247,7 @@ export function SalesTable() {
                     page: currentPage,
                     limit: limit,
                     search: debouncedSearch || undefined,
+                    status: statusFilter || undefined,
                     dateFrom: dateFrom ? format(dateFrom, "yyyy-MM-dd") : undefined,
                     dateTo: dateTo ? format(dateTo, "yyyy-MM-dd") : undefined,
                     userId: filterUserId || undefined,
@@ -595,13 +597,26 @@ export function SalesTable() {
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
-                        <h2 className="text-xl font-semibold hidden sm:block">Historial de Ventas</h2>
-                        <Input
-                            placeholder="Buscar por estado (ej. pagado)..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="max-w-xs"
-                        />
+                        <h2 className="text-xl font-semibold hidden lg:block">Historial de Ventas</h2>
+                        <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                            <Input
+                                placeholder="Buscar cliente..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full sm:w-[150px]"
+                            />
+                            <Select value={statusFilter || "todos"} onValueChange={(val) => setStatusFilter(val === "todos" ? "" : val)}>
+                                <SelectTrigger className="w-full sm:w-[150px]">
+                                    <SelectValue placeholder="Filtrar por estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos los estados</SelectItem>
+                                    <SelectItem value="pagado">Pagado</SelectItem>
+                                    <SelectItem value="fiado">Fiado</SelectItem>
+                                    <SelectItem value="debiendo">Debiendo</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 <Dialog open={isCreateOpen} onOpenChange={(val) => {
                     setIsCreateOpen(val);
@@ -1191,10 +1206,7 @@ export function SalesTable() {
                             <TableRow>
                                 <TableHead>Fecha</TableHead>
                                 <TableHead>Cajero</TableHead>
-                                <TableHead>Total (USD F)</TableHead>
-                                <TableHead>Total (USD T)</TableHead>
-                                <TableHead>Total (COP)</TableHead>
-                                <TableHead>Total (Bs)</TableHead>
+                                <TableHead>Cliente</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="w-[100px] text-right">Acciones</TableHead>
                             </TableRow>
@@ -1203,7 +1215,7 @@ export function SalesTable() {
                             {loading ? (
                                 Array.from({ length: 6 }).map((_, i) => (
                                     <TableRow key={i}>
-                                        {Array.from({ length: 8 }).map((_, j) => (
+                                        {Array.from({ length: 5 }).map((_, j) => (
                                             <TableCell key={j}>
                                                 <Skeleton className="h-4 w-full" />
                                             </TableCell>
@@ -1212,7 +1224,7 @@ export function SalesTable() {
                                 ))
                             ) : sales.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                                         {debouncedSearch ? "No se encontraron ventas." : "No hay ventas registradas."}
                                     </TableCell>
                                 </TableRow>
@@ -1226,13 +1238,11 @@ export function SalesTable() {
                                             <TableCell>
                                                 <span className="text-xs text-muted-foreground" title={sale.user?.email}>{sale.user?.name || sale.user?.email || '-'}</span>
                                             </TableCell>
-                                            <TableCell>{sale.receivedTotals.usdFisico > 0 ? `$${sale.receivedTotals.usdFisico.toFixed(2)}` : '-'}</TableCell>
-                                            <TableCell>{sale.receivedTotals.usdTarjeta > 0 ? `$${sale.receivedTotals.usdTarjeta.toFixed(2)}` : '-'}</TableCell>
-                                            <TableCell>{sale.receivedTotals.cop > 0 ? `$${sale.receivedTotals.cop.toLocaleString('es-CO')}` : '-'}</TableCell>
-                                            <TableCell>{sale.receivedTotals.ves > 0 ? `Bs. ${sale.receivedTotals.ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                            <TableCell>
+                                                <span className="text-xs font-medium text-muted-foreground truncate max-w-[150px] inline-block" title={sale.customerName || ''}>{sale.customerName || '-'}</span>
+                                            </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col gap-1 items-start">
-                                                    {sale.customerName && <span className="text-xs font-medium text-muted-foreground truncate max-w-[120px]" title={sale.customerName}>{sale.customerName}</span>}
                                                     <Badge variant={sale.status === 'pagado' ? 'success' : sale.status === 'fiado' ? 'destructive' : 'warning'} className="capitalize">
                                                         {sale.status}
                                                     </Badge>

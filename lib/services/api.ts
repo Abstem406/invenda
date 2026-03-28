@@ -236,6 +236,7 @@ export interface QueryParams {
     dateFrom?: string;
     dateTo?: string;
     userId?: string;
+    status?: string;
 }
 
 const buildQueryString = (params?: QueryParams) => {
@@ -248,6 +249,7 @@ const buildQueryString = (params?: QueryParams) => {
     if (params.dateFrom !== undefined) query.append("dateFrom", params.dateFrom);
     if (params.dateTo !== undefined) query.append("dateTo", params.dateTo);
     if (params.userId !== undefined) query.append("userId", params.userId);
+    if (params.status !== undefined) query.append("status", params.status);
     const queryString = query.toString();
     return queryString ? `?${queryString}` : "";
 };
