@@ -1087,12 +1087,12 @@ export function SalesTable() {
                                 <Button
                                     variant={"outline"}
                                     className={cn(
-                                        "w-[160px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
+                                        "w-full sm:w-[180px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
                                         !dateFrom && "text-muted-foreground"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                    {dateFrom ? format(dateFrom, "PP", { locale: es }) : <span>Seleccionar fecha</span>}
+                                    {dateFrom ? format(dateFrom, "PP", { locale: es }) : <span>Seleccionar</span>}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -1101,6 +1101,7 @@ export function SalesTable() {
                                     selected={dateFrom}
                                     onSelect={(d) => { setDateFrom(d); setCurrentPage(1); }}
                                     initialFocus
+                                    locale={es}
                                 />
                             </PopoverContent>
                         </Popover>
@@ -1112,12 +1113,12 @@ export function SalesTable() {
                                 <Button
                                     variant={"outline"}
                                     className={cn(
-                                        "w-[160px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
+                                        "w-full sm:w-[180px] h-9 justify-start text-left font-normal text-sm flex-row items-center",
                                         !dateTo && "text-muted-foreground"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                    {dateTo ? format(dateTo, "PP", { locale: es }) : <span>Seleccionar fecha</span>}
+                                    {dateTo ? format(dateTo, "PP", { locale: es }) : <span>Seleccionar</span>}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -1126,6 +1127,7 @@ export function SalesTable() {
                                     selected={dateTo}
                                     onSelect={(d) => { setDateTo(d); setCurrentPage(1); }}
                                     initialFocus
+                                    locale={es}
                                 />
                             </PopoverContent>
                         </Popover>

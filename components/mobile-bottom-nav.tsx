@@ -38,6 +38,7 @@ import {
     Sun,
     KeyRound,
     LogOut,
+    TrendingUp,
 } from "lucide-react"
 
 // Primary nav items visible in the bottom bar
@@ -165,6 +166,21 @@ export function MobileBottomNav() {
                                         <span className="text-xs font-medium">Usuarios</span>
                                     </Link>
                                 )}
+
+                                {/* Total Sales link */}
+                                <Link
+                                    href="/total-sales"
+                                    onClick={() => setSheetOpen(false)}
+                                    className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-colors ${pathname === "/total-sales"
+                                            ? "bg-primary/10 text-primary"
+                                            : "hover:bg-muted"
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-indigo-500/10">
+                                        <TrendingUp className="h-6 w-6 text-indigo-500" />
+                                    </div>
+                                    <span className="text-xs font-medium text-center leading-tight">Ventas<br/>Totales</span>
+                                </Link>
 
                                 {/* Theme toggle */}
                                 <button
