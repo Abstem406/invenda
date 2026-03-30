@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  invenda:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invenda-app
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Add other environment variables here or via Coolify dashboard
+      # - NEXT_PUBLIC_API_URL=https://api.example.com
+    restart: unless-stopped
