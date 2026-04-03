@@ -389,15 +389,8 @@ export const api = {
     getSales: async (params?: QueryParams): Promise<PaginatedResponse<Sale>> => {
         return fetchApi<PaginatedResponse<Sale>>(`/sales${buildQueryString(params)}`);
     },
-    getProductsSummary: async (dateFrom?: string, dateTo?: string): Promise<{ productId: string, name: string, totalSold: number }[]> => {
-        let qs = "";
-        if (dateFrom || dateTo) {
-            const params = new URLSearchParams();
-            if (dateFrom) params.append("dateFrom", dateFrom);
-            if (dateTo) params.append("dateTo", dateTo);
-            qs = `?${params.toString()}`;
-        }
-        return fetchApi<{ productId: string, name: string, totalSold: number }[]>(`/sales/products-summary${qs}`);
+    getProductsSummary: async (params?: QueryParams): Promise<PaginatedResponse<{ productId: string, name: string, totalSold: number, totalUsdFisico: number, totalUsdTarjeta: number, totalCop: number, totalVes: number }>> => {
+        return fetchApi<PaginatedResponse<{ productId: string, name: string, totalSold: number, totalUsdFisico: number, totalUsdTarjeta: number, totalCop: number, totalVes: number }>>(`/sales/products-summary${buildQueryString(params)}`);
     },
     createSale: async (sale: Omit<Sale, "id" | "date" | "userId" | "user">): Promise<Sale> => {
         return fetchApi<Sale>("/sales", {

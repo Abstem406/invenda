@@ -48,10 +48,12 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
+import { SmartPagination } from "@/components/ui/smart-pagination"
 import { Edit, Plus, Trash2, ArrowUpDown, Settings2, RefreshCw, Loader2 } from "lucide-react"
 import { getBcvRate } from "@/app/actions/bcv"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent } from "@/components/ui/card"
 
 export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
     const isMobile = useIsMobile()
@@ -526,40 +528,43 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto flex-1">
-                    <h2 className="text-xl font-semibold hidden sm:block">Productos</h2>
-                    <Input
-                        placeholder="Buscar producto..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="max-w-xs"
-                    />
-                    <Button variant="outline" size="lg" onClick={openRatesConfig} className="w-full sm:w-auto text-md">
-                        <Settings2 className="w-4 h-4 mr-2" />
-                        Tasas de Cambio
-                    </Button>
-                </div>
-                <Dialog open={isCreateOpen} onOpenChange={(val) => {
-                    setIsCreateOpen(val);
-                    if (!val) resetForm();
-                    else {
-                        // Refetch categories and rates when opening the dialog
-                        Promise.all([
-                            api.getCategories({ limit: 100 }),
-                            api.getExchangeRates()
-                        ]).then(([catsRes, exchange]) => {
-                            setCategories(catsRes.data);
-                            setRates(exchange);
-                        }).catch(console.error);
-                    }
-                }}>
-                    <DialogTrigger asChild>
-                        <Button size="lg" className="w-full sm:w-auto text-md">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nuevo Producto
+            <Card>
+                <CardContent className="flex flex-col sm:flex-row items-end justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row items-end gap-4 w-full sm:w-auto flex-1">
+                        <div className="flex flex-col space-y-1.5 w-full sm:w-auto">
+                            <label className="text-xs text-muted-foreground uppercase font-semibold">Buscar</label>
+                            <Input
+                                placeholder="Buscar producto..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="max-w-xs"
+                            />
+                        </div>
+                        <Button variant="outline" size="lg" onClick={openRatesConfig} className="w-full sm:w-auto">
+                            <Settings2 className="w-4 h-4 mr-2" />
+                            Tasas de Cambio
                         </Button>
-                    </DialogTrigger>
+                    </div>
+                    <Dialog open={isCreateOpen} onOpenChange={(val) => {
+                        setIsCreateOpen(val);
+                        if (!val) resetForm();
+                        else {
+                            // Refetch categories and rates when opening the dialog
+                            Promise.all([
+                                api.getCategories({ limit: 100 }),
+                                api.getExchangeRates()
+                            ]).then(([catsRes, exchange]) => {
+                                setCategories(catsRes.data);
+                                setRates(exchange);
+                            }).catch(console.error);
+                        }
+                    }}>
+                        <DialogTrigger asChild>
+                            <Button size="lg" className="w-full sm:w-auto">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Nuevo Producto
+                            </Button>
+                        </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Crear Producto</DialogTitle>
@@ -634,7 +639,8 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                         </form>
                     </DialogContent>
                 </Dialog>
-            </div>
+                </CardContent>
+            </Card>
 
             {/* Mobile Card View */}
             {isMobile ? (
@@ -844,45 +850,13 @@ export function ProductsTable({ refreshTrigger = 0 }: { refreshTrigger?: number 
                     <span>registros por página</span>
                 </div>
 
-                {totalPages > 1 && (
-                    <Pagination className="w-auto mx-0 sm:mx-auto">
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-
-                            {/* Render numbered pages */}
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                <PaginationItem key={page} className="hidden sm:inline-block">
-                                    <Button
-                                        variant={currentPage === page ? "outline" : "ghost"}
-                                        size="icon"
-                                        onClick={() => setCurrentPage(page)}
-                                        className="w-9 h-9"
-                                    >
-                                        {page}
-                                    </Button>
-                                </PaginationItem>
-                            ))}
-
-                            {/* Mobile short display */}
-                            <PaginationItem className="sm:hidden">
-                                <span className="text-sm text-muted-foreground px-4">
-                                    Página {currentPage} de {totalPages}
-                                </span>
-                            </PaginationItem>
-
-                            <PaginationItem>
-                                <PaginationNext
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
+                {totalPages > 0 && (
+                    <SmartPagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        maxVisiblePages={10}
+                    />
                 )}
             </div>
 

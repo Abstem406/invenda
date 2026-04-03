@@ -39,6 +39,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
+import { SmartPagination } from "@/components/ui/smart-pagination"
 import {
     Select,
     SelectContent,
@@ -47,6 +48,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Edit, Plus, Trash2 } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 
 export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
     const [categories, setCategories] = React.useState<Category[]>([])
@@ -166,52 +168,52 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
-                    <h2 className="text-xl font-semibold hidden sm:block">Categorías</h2>
-                    <Input
-                        placeholder="Buscar categoría..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="max-w-xs"
-                    />
-                </div>
-                <Dialog open={isCreateOpen} onOpenChange={(val) => {
-                    setIsCreateOpen(val)
-                    if (!val) {
-                        setName("")
-                        setError("")
-                    }
-                }}>
-                    <DialogTrigger asChild>
-                        <Button size="lg" className="w-full sm:w-auto text-md">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nueva Categoría
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Crear Categoría</DialogTitle>
-                            <DialogDescription>
-                                Ingresa el nombre de la nueva categoría.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleCreate} className="space-y-4">
-                            {error && <div className="text-destructive text-sm font-medium">{error}</div>}
-                            <Input
-                                placeholder="Nombre de categoría"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                disabled={isSubmitting}
-                            />
-                            <DialogFooter>
-                                <Button type="submit" disabled={isSubmitting || !name.trim()}>
-                                    {isSubmitting ? "Guardando..." : "Guardar"}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+            <div className="flex flex-col sm:flex-row items-end justify-between gap-4 pb-4 border-b">
+                    <div className="flex flex-col space-y-1.5 w-full sm:w-auto flex-1">
+                        <label className="text-xs text-muted-foreground uppercase font-semibold">Buscar</label>
+                        <Input
+                            placeholder="Buscar categoría..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="max-w-xs"
+                        />
+                    </div>
+                    <Dialog open={isCreateOpen} onOpenChange={(val) => {
+                        setIsCreateOpen(val)
+                        if (!val) {
+                            setName("")
+                            setError("")
+                        }
+                    }}>
+                        <DialogTrigger asChild>
+                            <Button size="lg" className="w-full sm:w-auto">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Nueva Categoría
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-lg">
+                            <DialogHeader>
+                                <DialogTitle>Crear Categoría</DialogTitle>
+                                <DialogDescription>
+                                    Ingresa el nombre de la nueva categoría.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleCreate} className="space-y-4">
+                                {error && <div className="text-destructive text-sm font-medium">{error}</div>}
+                                <Input
+                                    placeholder="Nombre de categoría"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    disabled={isSubmitting}
+                                />
+                                <DialogFooter>
+                                    <Button type="submit" disabled={isSubmitting || !name.trim()}>
+                                        {isSubmitting ? "Guardando..." : "Guardar"}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
             </div>
 
             <div className="border rounded-md">
@@ -305,45 +307,13 @@ export function CategoriesTable({ refreshTrigger = 0 }: { refreshTrigger?: numbe
                     <span>registros por página</span>
                 </div>
 
-                {totalPages > 1 && (
-                    <Pagination className="w-auto mx-0 sm:mx-auto">
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-
-                            {/* Render numbered pages */}
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                <PaginationItem key={page} className="hidden sm:inline-block">
-                                    <Button
-                                        variant={currentPage === page ? "outline" : "ghost"}
-                                        size="icon"
-                                        onClick={() => setCurrentPage(page)}
-                                        className="w-9 h-9"
-                                    >
-                                        {page}
-                                    </Button>
-                                </PaginationItem>
-                            ))}
-
-                            {/* Mobile short display */}
-                            <PaginationItem className="sm:hidden">
-                                <span className="text-sm text-muted-foreground px-4">
-                                    Página {currentPage} de {totalPages}
-                                </span>
-                            </PaginationItem>
-
-                            <PaginationItem>
-                                <PaginationNext
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
+                {totalPages > 0 && (
+                    <SmartPagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        maxVisiblePages={10}
+                    />
                 )}
             </div>
 

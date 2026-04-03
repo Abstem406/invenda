@@ -40,6 +40,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
+import { SmartPagination } from "@/components/ui/smart-pagination"
 import {
     Select,
     SelectContent,
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/select"
 import { Edit, Plus, Search, ShieldAlert, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 
 export function UsersTable() {
@@ -245,26 +247,30 @@ export function UsersTable() {
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4 w-full sm:w-auto flex-1 relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar por nombre o email..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8 w-full max-w-sm"
-                    />
-                </div>
-                <Dialog open={isCreateOpen} onOpenChange={(open) => {
-                    setIsCreateOpen(open)
-                    if (!open) resetCreateForm()
-                }}>
-                    <DialogTrigger asChild>
-                        <Button size="lg" className="w-full sm:w-auto text-md">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nuevo Usuario
-                        </Button>
-                    </DialogTrigger>
+            <Card>
+                <CardContent className="flex flex-col sm:flex-row items-end justify-between gap-4">
+                    <div className="flex flex-col space-y-1.5 w-full sm:w-auto flex-1">
+                        <label className="text-xs text-muted-foreground uppercase font-semibold">Buscar</label>
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar por nombre o email..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-8 w-full max-w-sm"
+                            />
+                        </div>
+                    </div>
+                    <Dialog open={isCreateOpen} onOpenChange={(open) => {
+                        setIsCreateOpen(open)
+                        if (!open) resetCreateForm()
+                    }}>
+                        <DialogTrigger asChild>
+                            <Button size="lg" className="w-full sm:w-auto">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Nuevo Usuario
+                            </Button>
+                        </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Crear Nuevo Usuario</DialogTitle>
@@ -327,7 +333,8 @@ export function UsersTable() {
                         </form>
                     </DialogContent>
                 </Dialog>
-            </div>
+                </CardContent>
+            </Card>
 
             {error && !isCreateOpen && !isEditOpen && (
                 <div className="text-destructive text-sm font-medium">{error}</div>
@@ -499,43 +506,13 @@ export function UsersTable() {
                     <span>registros</span>
                 </div>
 
-                {totalPages > 1 && (
-                    <Pagination className="w-auto mx-0 sm:mx-auto">
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                <PaginationItem key={page} className="hidden sm:inline-block">
-                                    <Button
-                                        variant={currentPage === page ? "outline" : "ghost"}
-                                        size="icon"
-                                        onClick={() => setCurrentPage(page)}
-                                        className="w-9 h-9"
-                                    >
-                                        {page}
-                                    </Button>
-                                </PaginationItem>
-                            ))}
-
-                            <PaginationItem className="sm:hidden">
-                                <span className="text-sm text-muted-foreground px-4">
-                                    Página {currentPage} de {totalPages}
-                                </span>
-                            </PaginationItem>
-
-                            <PaginationItem>
-                                <PaginationNext
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
+                {totalPages > 0 && (
+                    <SmartPagination 
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        maxVisiblePages={10}
+                    />
                 )}
             </div>
 

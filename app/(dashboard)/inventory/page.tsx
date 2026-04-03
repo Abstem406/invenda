@@ -18,19 +18,21 @@ export default function InventoryPage() {
                 </div>
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button size="lg" variant="outline">
+                        <Button size="lg" variant="outline" className="w-full sm:w-auto">
                             <Layers className="w-4 h-4 mr-2" />
                             Categorías de productos
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader className="mb-4">
+                    <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+                        <DialogHeader className="mb-4 shrink-0">
                             <DialogTitle>Gestión de Categorías</DialogTitle>
                             <DialogDescription>
                                 Administra las categorías de tus productos para mantener todo organizado.
                             </DialogDescription>
                         </DialogHeader>
-                        <CategoriesTable />
+                        <div className="flex-1 overflow-y-auto">
+                            <CategoriesTable />
+                        </div>
                     </DialogContent>
                 </Dialog>
             </div>
